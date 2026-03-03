@@ -8,23 +8,23 @@ import type { TabType } from '@/types'
 const configStore = useConfigStore()
 const navStore = useNavStore()
 
-// 可用的标签页（启用且有数据才显示）
+// 可用的标签页（根据配置启用状态显示，数据按需加载）
 const availableTabs = computed(() => {
   const tabs: { key: TabType; label: string; icon: typeof Globe }[] = []
-  
-  // 站点：启用且有数据
-  if (navStore.sitesEnabled && navStore.allSites.length > 0) {
+
+  // 站点
+  if (navStore.sitesEnabled) {
     tabs.push({ key: 'sites', label: '站点', icon: Globe })
   }
-  // Docker：启用且有数据
-  if (navStore.dockerEnabled && navStore.allContainers.length > 0) {
+  // Docker
+  if (navStore.dockerEnabled) {
     tabs.push({ key: 'docker', label: 'Docker', icon: Container })
   }
-  // Lucky 服务：启用且有数据
-  if (navStore.luckyServicesEnabled && navStore.allLuckyServices.length > 0) {
+  // Lucky 服务
+  if (navStore.luckyServicesEnabled) {
     tabs.push({ key: 'luckyServices', label: 'Lucky 服务', icon: Server })
   }
-  
+
   return tabs
 })
 
@@ -36,14 +36,20 @@ function switchTab(tab: TabType) {
   configStore.setCurrentTab(tab)
 }
 
-// 监听标签页变化，控制数据轮询
-watch(currentTab, (newTab: TabType) => {
+// 监听标签页变化，加载数据并控制轮询
+watch(currentTab, async (newTab: TabType) => {
+  // 停止所有轮询
   navStore.stopDockerStatsPolling()
   navStore.stopLuckyServicesStatsPolling()
 
-  if (newTab === 'docker' && navStore.dockerEnabled) {
+  // 按需加载数据
+  if (newTab === 'sites' && navStore.sitesEnabled) {
+    await navStore.loadSitesData()
+  } else if (newTab === 'docker' && navStore.dockerEnabled) {
+    await navStore.loadDockerData()
     navStore.startDockerStatsPolling()
   } else if (newTab === 'luckyServices' && navStore.luckyServicesEnabled) {
+    await navStore.loadLuckyServicesData()
     navStore.startLuckyServicesStatsPolling()
   }
 }, { immediate: true })

@@ -41,20 +41,20 @@ const showHeader = computed(() => configStore.showHeader)
 
 // 获取第一个可用的标签页
 function getFirstAvailableTab(): TabType | null {
-  if (hasSites.value) return 'sites'
-  if (hasDocker.value) return 'docker'
-  if (hasLuckyServices.value) return 'luckyServices'
+  if (navStore.sitesEnabled) return 'sites'
+  if (navStore.dockerEnabled) return 'docker'
+  if (navStore.luckyServicesEnabled) return 'luckyServices'
   return null
 }
 
 // 检查并修正当前标签页
 function ensureValidTab() {
   const tab = currentTab.value
-  const isCurrentTabValid = 
-    (tab === 'sites' && hasSites.value) ||
-    (tab === 'docker' && hasDocker.value) ||
-    (tab === 'luckyServices' && hasLuckyServices.value)
-  
+  const isCurrentTabValid =
+    (tab === 'sites' && navStore.sitesEnabled) ||
+    (tab === 'docker' && navStore.dockerEnabled) ||
+    (tab === 'luckyServices' && navStore.luckyServicesEnabled)
+
   if (!isCurrentTabValid) {
     const firstTab = getFirstAvailableTab()
     if (firstTab) {
@@ -114,27 +114,28 @@ watch(
 onMounted(async () => {
   // 先加载本地配置（包含默认值）
   configStore.loadConfig()
-  
-  // 并行加载数据和服务器配置
+
+  // 加载基础配置（nav.json）和服务器配置
   const [, serverConfig] = await Promise.all([
-    navStore.loadAllData(),
-    navStore.fetchServerConfig()  // 失败时返回 null，不会影响正常运行
+    navStore.loadNavConfig(),
+    navStore.fetchServerConfig()
   ])
-  
-  // 尝试应用服务器配置（仅在没有本地配置时生效）
-  // 如果服务器配置不可用，将使用内置默认配置
+
+  // 尝试应用服务器配置
   if (serverConfig) {
     configStore.applyServerConfig(serverConfig)
   }
-  
+
   // 如果当前是自动或混合模式，调用接口重新识别网络类型
   const mode = configStore.networkMode
   if (mode === 'auto' || mode === 'hybrid') {
     await navStore.fetchNetworkType()
   }
-  
+
   // 检查当前标签页是否有效，无效则切换到第一个可用标签页
   ensureValidTab()
+
+  // 数据加载由 ContentTabs 组件的 watch 统一处理
 })
 </script>
 

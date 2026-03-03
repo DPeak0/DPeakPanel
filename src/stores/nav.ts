@@ -125,38 +125,64 @@ export const useNavStore = defineStore('nav', () => {
     }
   }
 
-  // 加载所有数据
+  // 加载基础配置（nav.json）
+  async function loadNavConfig() {
+    const config = await fetchJson<NavConfig>(API.nav)
+    if (config) {
+      navConfig.value = config
+      // 设置服务器背景图片
+      const configStore = useConfigStore()
+      const bgImages = config.settings?.backgroundImages || []
+      configStore.setServerBackgrounds(bgImages)
+    }
+    // 基础配置加载完成，关闭加载状态
+    isLoading.value = false
+    return config
+  }
+
+  // 加载站点数据
+  async function loadSitesData() {
+    const data = await fetchJson<SitesData>(API.sites)
+    if (data) {
+      sitesData.value = data
+      networkType.value = data.networkType || 'external'
+      clientIP.value = data.clientIP || ''
+    }
+    return data
+  }
+
+  // 加载 Docker 数据
+  async function loadDockerData() {
+    const data = await fetchJson<DockerData>(API.docker)
+    if (data) {
+      dockerData.value = data
+    }
+    return data
+  }
+
+  // 加载 Lucky 服务数据
+  async function loadLuckyServicesData() {
+    const data = await fetchJson<LuckyServicesData>(API.luckyServices)
+    if (data) {
+      luckyServicesData.value = data
+    }
+    return data
+  }
+
+  // 加载所有数据（兼容旧调用）
   async function loadAllData() {
     isLoading.value = true
     loadError.value = null
 
     try {
-      const results = await Promise.allSettled([
-        fetchJson<NavConfig>(API.nav),
-        fetchJson<SitesData>(API.sites),
-        fetchJson<DockerData>(API.docker),
-        fetchJson<LuckyServicesData>(API.luckyServices)
+      // 先加载基础配置
+      await loadNavConfig()
+      // 同时加载所有数据源
+      await Promise.all([
+        loadSitesData(),
+        loadDockerData(),
+        loadLuckyServicesData()
       ])
-
-      // 解析结果
-      if (results[0].status === 'fulfilled') {
-        navConfig.value = results[0].value
-        // 设置服务器背景图片
-        const configStore = useConfigStore()
-        const bgImages = results[0].value?.settings?.backgroundImages || []
-        configStore.setServerBackgrounds(bgImages)
-      }
-      if (results[1].status === 'fulfilled' && results[1].value) {
-        sitesData.value = results[1].value
-        networkType.value = results[1].value.networkType || 'external'
-        clientIP.value = results[1].value.clientIP || ''
-      }
-      if (results[2].status === 'fulfilled') {
-        dockerData.value = results[2].value
-      }
-      if (results[3].status === 'fulfilled') {
-        luckyServicesData.value = results[3].value
-      }
     } catch (e) {
       loadError.value = String(e)
     } finally {
@@ -314,6 +340,10 @@ export const useNavStore = defineStore('nav', () => {
 
     // 方法
     loadAllData,
+    loadNavConfig,
+    loadSitesData,
+    loadDockerData,
+    loadLuckyServicesData,
     fetchNetworkType,
     fetchServerConfig,
     loadDockerStats,
