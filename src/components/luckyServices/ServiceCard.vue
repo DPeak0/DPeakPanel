@@ -142,6 +142,18 @@ const displayName = computed(() => {
   return props.service.displayName || props.service.name
 })
 
+// 图标 URL 处理（支持完整链接和本地路径）
+const iconUrl = computed(() => {
+  if (!props.service.iconUrl) return null
+  const url = props.service.iconUrl
+  // 如果是完整链接（http:// 或 https://），直接使用
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // 否则拼接本地 iconlibs 路径
+  return `./backend/iconlibs/${url}`
+})
+
 // 格式化流量
 function formatTraffic(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -186,6 +198,64 @@ const cardClass = computed(() => {
   else classes.push('layout-normal')
   return classes.join(' ')
 })
+
+// 图标背景样式（根据是否有自定义图标区分）
+const iconBgStyle = computed(() => {
+  if (iconUrl.value) {
+    // 有图标：使用主题适配的中性背景
+    return {
+      boxShadow: `0 4px 20px -4px hsl(var(--icon-placeholder-bg) / 0.5)`
+    }
+  } else {
+    // 无图标：使用类型颜色渐变背景
+    return {
+      background: `linear-gradient(135deg, hsl(${typeConfig.value.color}), hsl(var(--neon-cyan)))`,
+      boxShadow: `0 4px 20px -4px hsl(${typeConfig.value.shadow} / 0.5)`
+    }
+  }
+})
+
+// 紧凑布局图标背景样式
+const compactIconBgStyle = computed(() => {
+  if (iconUrl.value) {
+    return {
+      boxShadow: `0 2px 12px -2px hsl(var(--icon-placeholder-bg) / 0.4)`
+    }
+  } else {
+    return {
+      background: `linear-gradient(135deg, hsl(${typeConfig.value.color}), hsl(var(--neon-cyan)))`,
+      boxShadow: `0 2px 12px -2px hsl(${typeConfig.value.shadow} / 0.4)`
+    }
+  }
+})
+
+// 列表布局图标背景样式
+const listIconBgStyle = computed(() => {
+  if (iconUrl.value) {
+    return {
+      boxShadow: `0 2px 10px -2px hsl(var(--icon-placeholder-bg) / 0.4)`
+    }
+  } else {
+    return {
+      background: `linear-gradient(135deg, hsl(${typeConfig.value.color}), hsl(var(--neon-cyan)))`,
+      boxShadow: `0 2px 10px -2px hsl(${typeConfig.value.shadow} / 0.4)`
+    }
+  }
+})
+
+// 极简布局图标背景样式
+const minimalIconBgStyle = computed(() => {
+  if (iconUrl.value) {
+    return {
+      boxShadow: `0 3px 15px -3px hsl(var(--icon-placeholder-bg) / 0.5)`
+    }
+  } else {
+    return {
+      background: `linear-gradient(135deg, hsl(${typeConfig.value.color}), hsl(var(--neon-cyan)))`,
+      boxShadow: `0 3px 15px -3px hsl(${typeConfig.value.shadow} / 0.5)`
+    }
+  }
+})
 </script>
 
 <template>
@@ -214,14 +284,18 @@ const cardClass = computed(() => {
         <!-- 头部：图标和名称 -->
         <div class="card-header">
           <div class="icon-wrapper">
-            <div 
+            <div
               class="icon-box"
-              :style="{ 
-                background: `linear-gradient(135deg, hsl(${typeConfig.color}), hsl(var(--neon-cyan)))`,
-                boxShadow: `0 4px 20px -4px hsl(${typeConfig.shadow} / 0.5)` 
-              }"
+              :style="iconBgStyle"
             >
-              <component :is="typeConfig.icon" class="icon-default" />
+              <img
+                v-if="iconUrl"
+                :src="iconUrl"
+                :alt="displayName"
+                class="icon-img"
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+              <component v-else :is="typeConfig.icon" class="icon-default" />
             </div>
             <div class="status-indicator" :class="stateConfig.class" />
           </div>
@@ -345,14 +419,18 @@ const cardClass = computed(() => {
     <template v-else-if="layout === 'compact'">
       <div class="card-inner-compact">
         <div class="compact-header">
-          <div 
+          <div
             class="compact-icon"
-            :style="{ 
-              background: `linear-gradient(135deg, hsl(${typeConfig.color}), hsl(var(--neon-cyan)))`,
-              boxShadow: `0 2px 12px -2px hsl(${typeConfig.shadow} / 0.4)` 
-            }"
+            :style="compactIconBgStyle"
           >
-            <component :is="typeConfig.icon" class="icon-default-sm" />
+            <img
+              v-if="iconUrl"
+              :src="iconUrl"
+              :alt="displayName"
+              class="icon-img"
+              @error="($event.target as HTMLImageElement).style.display = 'none'"
+            />
+            <component v-else :is="typeConfig.icon" class="icon-default-sm" />
           </div>
           <div class="compact-content">
             <h3 class="compact-title">{{ displayName }}</h3>
@@ -402,14 +480,18 @@ const cardClass = computed(() => {
     <!-- ============ List 布局 - 横向列表 ============ -->
     <template v-else-if="layout === 'list'">
       <div class="card-inner-list">
-        <div 
+        <div
           class="list-icon"
-          :style="{ 
-            background: `linear-gradient(135deg, hsl(${typeConfig.color}), hsl(var(--neon-cyan)))`,
-            boxShadow: `0 2px 10px -2px hsl(${typeConfig.shadow} / 0.4)` 
-          }"
+          :style="listIconBgStyle"
         >
-          <component :is="typeConfig.icon" class="icon-default-sm" />
+          <img
+            v-if="iconUrl"
+            :src="iconUrl"
+            :alt="displayName"
+            class="icon-img"
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
+          />
+          <component v-else :is="typeConfig.icon" class="icon-default-sm" />
         </div>
         
         <div class="list-content">
@@ -491,16 +573,20 @@ const cardClass = computed(() => {
     <!-- ============ Minimal 布局 - 极简 ============ -->
     <template v-else>
       <div class="card-inner-minimal">
-        <div 
+        <div
           class="minimal-icon"
-          :style="{ 
-            background: `linear-gradient(135deg, hsl(${typeConfig.color}), hsl(var(--neon-cyan)))`,
-            boxShadow: `0 3px 15px -3px hsl(${typeConfig.shadow} / 0.5)` 
-          }"
+          :style="minimalIconBgStyle"
         >
-          <component :is="typeConfig.icon" class="icon-default-md" />
+          <img
+            v-if="iconUrl"
+            :src="iconUrl"
+            :alt="displayName"
+            class="icon-img"
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
+          />
+          <component v-else :is="typeConfig.icon" class="icon-default-md" />
           <!-- 状态指示器 -->
-          <div 
+          <div
             class="minimal-status-dot"
             :class="stateConfig.class"
             :style="{ boxShadow: `0 0 8px hsl(${stateConfig.shadow} / 0.8)` }"
@@ -673,8 +759,10 @@ const cardClass = computed(() => {
   overflow: hidden;
   filter: brightness(var(--icon-brightness, 1));
   position: relative;
+  /* 使用主题适配的背景色 */
+  background: hsl(var(--icon-placeholder-bg));
   /* 弹性缓动 */
-  transition: 
+  transition:
     transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 300ms ease;
 }
@@ -699,6 +787,12 @@ const cardClass = computed(() => {
   width: 1.5rem;
   height: 1.5rem;
   color: white;
+}
+
+.icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .status-indicator {
@@ -1008,6 +1102,8 @@ const cardClass = computed(() => {
   flex-shrink: 0;
   filter: brightness(var(--icon-brightness, 1));
   position: relative;
+  /* 使用主题适配的背景色 */
+  background: hsl(var(--icon-placeholder-bg));
 }
 
 .compact-icon::after {
@@ -1196,6 +1292,8 @@ const cardClass = computed(() => {
   flex-shrink: 0;
   filter: brightness(var(--icon-brightness, 1));
   position: relative;
+  /* 使用主题适配的背景色 */
+  background: hsl(var(--icon-placeholder-bg));
 }
 
 .list-icon::after {
@@ -1411,6 +1509,8 @@ const cardClass = computed(() => {
   position: relative;
   transition: transform 300ms var(--ease-spring);
   filter: brightness(var(--icon-brightness, 1));
+  /* 使用主题适配的背景色 */
+  background: hsl(var(--icon-placeholder-bg));
 }
 
 .minimal-icon::after {

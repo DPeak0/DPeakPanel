@@ -160,6 +160,18 @@ const displayName = computed(() => {
   return props.container.displayName || props.container.containerName
 })
 
+// 图标 URL 处理（支持完整链接和本地路径）
+const iconUrl = computed(() => {
+  if (!props.container.iconUrl) return null
+  const url = props.container.iconUrl
+  // 如果是完整链接（http:// 或 https://），直接使用
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // 否则拼接本地 iconlibs 路径
+  return `./backend/iconlibs/${url}`
+})
+
 // CPU 百分比数值
 const cpuValue = computed(() => {
   const cpu = stats.value?.cpuPercent || '0%'
@@ -178,7 +190,7 @@ const cardClass = computed(() => {
 
 // 图标背景样式（根据是否有自定义图标区分）
 const iconBgStyle = computed(() => {
-  if (props.container.iconUrl) {
+  if (iconUrl.value) {
     // 有图标：使用主题适配的中性背景
     return {
       boxShadow: `0 4px 20px -4px hsl(var(--icon-placeholder-bg) / 0.5)`
@@ -194,7 +206,7 @@ const iconBgStyle = computed(() => {
 
 // 紧凑布局图标背景样式
 const compactIconBgStyle = computed(() => {
-  if (props.container.iconUrl) {
+  if (iconUrl.value) {
     return {
       boxShadow: `0 2px 12px -2px hsl(var(--icon-placeholder-bg) / 0.4)`
     }
@@ -208,7 +220,7 @@ const compactIconBgStyle = computed(() => {
 
 // 列表布局图标背景样式
 const listIconBgStyle = computed(() => {
-  if (props.container.iconUrl) {
+  if (iconUrl.value) {
     return {
       boxShadow: `0 2px 10px -2px hsl(var(--icon-placeholder-bg) / 0.4)`
     }
@@ -222,7 +234,7 @@ const listIconBgStyle = computed(() => {
 
 // 极简布局图标背景样式
 const minimalIconBgStyle = computed(() => {
-  if (props.container.iconUrl) {
+  if (iconUrl.value) {
     return {
       boxShadow: `0 3px 15px -3px hsl(var(--icon-placeholder-bg) / 0.5)`
     }
@@ -266,8 +278,8 @@ const minimalIconBgStyle = computed(() => {
               :style="iconBgStyle"
             >
               <img
-                v-if="container.iconUrl"
-                :src="`./backend/iconlibs/${container.iconUrl}`"
+                v-if="iconUrl"
+                :src="iconUrl"
                 :alt="displayName"
                 class="icon-img"
                 @error="($event.target as HTMLImageElement).style.display = 'none'"
@@ -389,8 +401,8 @@ const minimalIconBgStyle = computed(() => {
             :style="compactIconBgStyle"
           >
             <img
-              v-if="container.iconUrl"
-              :src="`./backend/iconlibs/${container.iconUrl}`"
+              v-if="iconUrl"
+              :src="iconUrl"
               :alt="displayName"
               class="icon-img"
               @error="($event.target as HTMLImageElement).style.display = 'none'"
@@ -435,8 +447,8 @@ const minimalIconBgStyle = computed(() => {
           :style="listIconBgStyle"
         >
           <img
-            v-if="container.iconUrl"
-            :src="`./backend/iconlibs/${container.iconUrl}`"
+            v-if="iconUrl"
+            :src="iconUrl"
             :alt="displayName"
             class="icon-img"
             @error="($event.target as HTMLImageElement).style.display = 'none'"
@@ -517,8 +529,8 @@ const minimalIconBgStyle = computed(() => {
           :style="minimalIconBgStyle"
         >
           <img
-            v-if="container.iconUrl"
-            :src="`./backend/iconlibs/${container.iconUrl}`"
+            v-if="iconUrl"
+            :src="iconUrl"
             :alt="displayName"
             class="icon-img"
             @error="($event.target as HTMLImageElement).style.display = 'none'"

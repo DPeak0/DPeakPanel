@@ -90,7 +90,10 @@ export interface DockerStatsResponse {
 
 /** Docker 容器统计 */
 export interface DockerStat {
+  key: string
   containerName: string
+  displayName?: string
+  iconUrl?: string
   state: string
   status?: string // 状态详情，包含运行时长，如 "Up 2 hours" 或 "Exited (0) 3 days ago"
   cpuPercent: string
@@ -144,6 +147,8 @@ export interface LuckyServicesStatsResponse {
 export interface LuckyServiceStat {
   key: string
   state: string
+  displayName?: string
+  iconUrl?: string
   tcpCurrentConnections: number
   udpCurrentConnections: number
   trafficIn: number
