@@ -13,9 +13,9 @@ const alignRight = ref(false)
 // 布局选项配置 - 四种布局
 const layoutOptions: { value: LayoutMode; label: string; icon: string; desc: string }[] = [
   { value: 'normal', label: '卡片', icon: 'card', desc: '标准布局' },
-  { value: 'compact', label: '紧凑', icon: 'compact', desc: '显示更多' },
+  { value: 'compact', label: '紧凑', icon: 'compact', desc: '密集排列' },
   { value: 'list', label: '列表', icon: 'list', desc: '横向展示' },
-  { value: 'minimal', label: '极简', icon: 'minimal', desc: '图标导航' }
+  { value: 'minimal', label: '极简', icon: 'minimal', desc: '纯图标' }
 ]
 
 // 当前选中的布局
@@ -117,6 +117,13 @@ onUnmounted(() => {
             </template>
             <template v-else-if="option.icon === 'compact'">
               <div class="preview-compact">
+                <div class="compact-item">
+                  <div class="compact-icon"></div>
+                  <div class="compact-lines">
+                    <div class="compact-line"></div>
+                    <div class="compact-line short"></div>
+                  </div>
+                </div>
                 <div class="compact-item">
                   <div class="compact-icon"></div>
                   <div class="compact-lines">
@@ -370,14 +377,14 @@ onUnmounted(() => {
 /* 布局预览框 */
 .layout-preview {
   width: 52px;
-  height: 40px;
-  border-radius: 8px;
+  height: 32px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.15) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 5px;
+  padding: 3px;
   transition: all 0.2s ease;
   overflow: hidden;
   position: relative;
@@ -396,7 +403,7 @@ onUnmounted(() => {
   border-color: rgba(6, 182, 212, 0.3);
 }
 
-/* ============ 卡片布局预览 ============ */
+/* ============ 卡片布局预览（更紧凑） ============ */
 .preview-card {
   display: flex;
   align-items: flex-start;
@@ -406,9 +413,9 @@ onUnmounted(() => {
 }
 
 .preview-card-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
   background: linear-gradient(135deg, rgba(6, 182, 212, 0.7) 0%, rgba(139, 92, 246, 0.5) 100%);
   flex-shrink: 0;
   display: flex;
@@ -418,8 +425,8 @@ onUnmounted(() => {
 }
 
 .card-icon-inner {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 1px;
   background: rgba(255, 255, 255, 0.8);
 }
@@ -427,52 +434,52 @@ onUnmounted(() => {
 .preview-card-content {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
 
 .card-title-bar {
-  height: 4px;
+  height: 3px;
   width: 100%;
-  border-radius: 2px;
+  border-radius: 1.5px;
   background: rgba(255, 255, 255, 0.4);
 }
 
 .card-desc-bar {
-  height: 3px;
+  height: 2px;
   width: 70%;
-  border-radius: 1.5px;
+  border-radius: 1px;
   background: rgba(255, 255, 255, 0.2);
 }
 
 .card-meta {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   margin-top: 1px;
 }
 
 .card-status-dot {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 4px rgba(34, 197, 94, 0.6);
+  box-shadow: 0 0 3px rgba(34, 197, 94, 0.6);
 }
 
 .card-badge {
-  height: 3px;
-  width: 12px;
-  border-radius: 1.5px;
+  height: 2px;
+  width: 10px;
+  border-radius: 1px;
   background: rgba(6, 182, 212, 0.4);
 }
 
-/* ============ 紧凑布局预览 ============ */
+/* ============ 紧凑布局预览 - 2x2 网格（更扁平） ============ */
 .preview-compact {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 3px;
+  gap: 2px;
   width: 100%;
   height: 100%;
 }
@@ -480,15 +487,15 @@ onUnmounted(() => {
 .compact-item {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px;
+  gap: 4px;
+  padding: 2px 3px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .compact-icon {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 2px;
   background: linear-gradient(135deg, rgba(6, 182, 212, 0.6) 0%, rgba(139, 92, 246, 0.4) 100%);
   flex-shrink: 0;
@@ -505,11 +512,11 @@ onUnmounted(() => {
 .compact-line {
   height: 2px;
   border-radius: 1px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .compact-line.short {
-  width: 60%;
+  width: 50%;
 }
 
 /* ============ 列表布局预览 ============ */
@@ -554,13 +561,15 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* ============ 极简布局预览 ============ */
+/* ============ 极简布局预览 - 纯图标网格 ============ */
 .preview-minimal {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
   width: 100%;
   height: 100%;
+  place-items: center;
+  padding: 2px;
 }
 
 .minimal-cell {
@@ -573,19 +582,15 @@ onUnmounted(() => {
 }
 
 .minimal-icon {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.5) 0%, rgba(139, 92, 246, 0.3) 100%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  width: 10px;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.6) 0%, rgba(139, 92, 246, 0.4) 100%);
+  box-shadow: 0 2px 4px rgba(6, 182, 212, 0.3);
 }
 
 .minimal-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 3px rgba(34, 197, 94, 0.5);
+  display: none;
 }
 
 /* 布局标签 */
@@ -654,11 +659,11 @@ onUnmounted(() => {
 }
 
 [data-theme="light"] .card-title-bar {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="light"] .card-desc-bar {
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 [data-theme="light"] .card-badge {

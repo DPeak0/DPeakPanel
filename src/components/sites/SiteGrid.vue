@@ -293,10 +293,10 @@ const gridClass = computed(() => {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
 
-/* Compact 布局 - 紧凑显示更多 */
+/* Compact 布局 - 超紧凑横向条 */
 .site-grid.compact {
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: clamp(0.5rem, 1.5vw, 0.75rem);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: clamp(0.375rem, 1.5vw, 0.5rem);
 }
 
 /* Large 布局（保留向后兼容）*/
@@ -321,10 +321,11 @@ const gridClass = computed(() => {
   }
 }
 
-/* Minimal 布局 - 极简显示最多 */
+/* Minimal 布局 - 纯图标网格，类似 Dock/Launcher */
 .site-grid.minimal {
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: clamp(0.5rem, 1.5vw, 0.75rem);
+  grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
+  gap: 1.25rem;
+  justify-items: center;
 }
 
 /* 空状态 */

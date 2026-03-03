@@ -283,10 +283,9 @@ const cardClass = computed(() => {
 // 图标类名
 const iconClass = computed(() => {
   const classes = ['neon-icon']
-  if (layout.value === 'compact' || layout.value === 'minimal') classes.push('size-sm')
+  if (layout.value === 'compact') classes.push('size-sm')
   else if (layout.value === 'large') classes.push('size-lg')
   else classes.push('size-md')
-  if (layout.value === 'minimal') classes.push('icon-centered')
   return classes.join(' ')
 })
 </script>
@@ -302,56 +301,85 @@ const iconClass = computed(() => {
   >
     <!-- 边框发光线 -->
     <div class="card-border-glow" />
-      
-    <!-- 内容容器 -->
-    <div class="card-inner" :class="{ 'layout-list': layout === 'list', 'layout-minimal': layout === 'minimal', 'layout-compact': layout === 'compact' }">
-      <!-- 图标 -->
-      <div
-        :class="iconClass"
-        :style="iconBgStyle"
-      >
-        <!-- 加载骨架屏 -->
-        <div v-if="iconLoading && iconUrl" class="icon-skeleton" />
-        <img
-          v-if="iconUrl"
-          :src="iconUrl"
-          :alt="site.name"
-          class="icon-img"
-          loading="lazy"
-          @load="handleIconLoad"
-          @error="handleIconError"
-        />
-        <span v-else class="icon-text" :class="{ 'text-lg': layout === 'large' }">
-          {{ site.name.charAt(0).toUpperCase() }}
-        </span>
-      </div>
 
-      <!-- 内容 -->
-      <div class="card-content" :class="{ 'has-mt': layout !== 'list' && layout !== 'minimal' }">
-        <div class="title-row">
-          <h3 class="card-title" :class="[`title-${layout}`]">
-            {{ site.name }}
-          </h3>
-          <!-- 外链指示图标 -->
-          <ArrowUpRight 
-            v-if="layout !== 'minimal'"
-            class="external-icon"
+    <!-- ========== Minimal 布局：纯图标模式 ========== -->
+    <template v-if="layout === 'minimal'">
+      <div class="minimal-inner">
+        <!-- 图标 -->
+        <div class="minimal-icon" :style="iconBgStyle">
+          <div v-if="iconLoading && iconUrl" class="icon-skeleton" />
+          <img
+            v-if="iconUrl"
+            :src="iconUrl"
+            :alt="site.name"
+            class="icon-img"
+            loading="lazy"
+            @load="handleIconLoad"
+            @error="handleIconError"
           />
+          <span v-else class="icon-text">
+            {{ site.name.charAt(0).toUpperCase() }}
+          </span>
         </div>
-        
-        <p
-          v-if="showDesc && layout !== 'compact' && layout !== 'minimal'"
-          class="card-desc"
-        >
-          {{ site.description }}
-        </p>
+        <!-- Hover 时显示的名称 -->
+        <div class="minimal-name">
+          <span>{{ site.name }}</span>
+        </div>
       </div>
+    </template>
 
-      <!-- 外链图标 (List 模式) -->
-      <div v-if="layout === 'list'" class="list-external-btn">
-        <ArrowUpRight class="list-external-icon" />
+    <!-- ========== 其他布局 ========== -->
+    <template v-else>
+      <!-- 内容容器 -->
+      <div class="card-inner" :class="{ 'layout-list': layout === 'list', 'layout-compact': layout === 'compact' }">
+        <!-- 图标 -->
+        <div
+          :class="iconClass"
+          :style="iconBgStyle"
+        >
+          <!-- 加载骨架屏 -->
+          <div v-if="iconLoading && iconUrl" class="icon-skeleton" />
+          <img
+            v-if="iconUrl"
+            :src="iconUrl"
+            :alt="site.name"
+            class="icon-img"
+            loading="lazy"
+            @load="handleIconLoad"
+            @error="handleIconError"
+          />
+          <span v-else class="icon-text" :class="{ 'text-lg': layout === 'large' }">
+            {{ site.name.charAt(0).toUpperCase() }}
+          </span>
+        </div>
+
+        <!-- 内容 -->
+        <div class="card-content" :class="{ 'has-mt': layout !== 'list' && layout !== 'compact' }">
+          <div class="title-row">
+            <h3 class="card-title" :class="[`title-${layout}`]">
+              {{ site.name }}
+            </h3>
+            <!-- 外链指示图标 -->
+            <ArrowUpRight
+              v-if="layout !== 'compact'"
+              class="external-icon"
+            />
+          </div>
+
+          <p
+            v-if="showDesc && layout !== 'compact'"
+            class="card-desc"
+          >
+            {{ site.description }}
+          </p>
+        </div>
+
+        <!-- 外链图标 (List 模式) -->
+        <div v-if="layout === 'list'" class="list-external-btn">
+          <ArrowUpRight class="list-external-icon" />
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -373,7 +401,7 @@ const iconClass = computed(() => {
   border: 1px solid hsl(var(--site-card-border));
   box-shadow: var(--site-card-shadow);
   /* 弹性缓动 - 更有质感的悬浮 */
-  transition: 
+  transition:
     transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 300ms ease,
     border-color 300ms ease,
@@ -405,10 +433,110 @@ const iconClass = computed(() => {
   padding: 0.875rem;
 }
 
+/* ========== Compact 布局：超紧凑横向条 ========== */
 .cyber-card.layout-compact {
-  padding: 0.5rem 0.625rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-md);
 }
 
+.cyber-card.layout-compact:hover {
+  transform: translateY(-2px);
+}
+
+/* ========== Minimal 布局：纯图标模式 ========== */
+.cyber-card.layout-minimal {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.cyber-card.layout-minimal::before,
+.cyber-card.layout-minimal .card-border-glow {
+  display: none;
+}
+
+.cyber-card.layout-minimal:hover {
+  transform: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Minimal 内部容器 */
+.minimal-inner {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Minimal 图标 - 更大更突出 */
+.minimal-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  transition:
+    transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 300ms ease;
+  background: hsl(var(--icon-placeholder-bg));
+}
+
+.minimal-icon .icon-text {
+  color: white;
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+/* Minimal hover 效果 */
+.cyber-card.layout-minimal:hover .minimal-icon {
+  transform: scale(1.15) translateY(-4px);
+  box-shadow:
+    0 12px 24px -6px hsl(var(--neon-cyan) / 0.4),
+    0 0 20px -4px hsl(var(--neon-cyan) / 0.3);
+}
+
+/* Minimal 名称 - hover 时从下方浮现 */
+.minimal-name {
+  position: absolute;
+  bottom: -2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: hsl(var(--glass-bg));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: 6px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 200ms ease;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.minimal-name span {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--text-primary));
+}
+
+.cyber-card.layout-minimal:hover .minimal-name {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ========== List 布局 ========== */
 .cyber-card.layout-list {
   padding: 0.875rem 1rem;
   border-left: 3px solid transparent;
@@ -425,23 +553,19 @@ const iconClass = computed(() => {
   border-left-color: hsl(var(--neon-cyan));
 }
 
-.cyber-card.layout-minimal {
-  padding: 0.625rem;
-  text-align: center;
-}
-
-.cyber-card:hover {
+/* ========== 通用 hover 效果（非 Minimal） ========== */
+.cyber-card:not(.layout-minimal):hover {
   transform: translateY(-4px) scale(1.01);
   background: hsl(var(--site-card-bg-hover));
   border-color: hsl(var(--site-card-border-hover));
   /* 多层次阴影 + 外发光 */
-  box-shadow: 
+  box-shadow:
     var(--site-card-shadow-hover),
     0 0 20px -6px hsl(var(--neon-cyan) / 0.3),
     0 0 40px -10px hsl(var(--neon-purple) / 0.15);
 }
 
-.cyber-card:hover::before {
+.cyber-card:not(.layout-minimal):hover::before {
   opacity: var(--site-card-shine-hover);
 }
 
@@ -487,13 +611,8 @@ const iconClass = computed(() => {
   width: 100%;
 }
 
-.card-inner.layout-minimal {
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
 .card-inner.layout-compact {
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 /* 霓虹图标 */
@@ -505,7 +624,7 @@ const iconClass = computed(() => {
   justify-content: center;
   position: relative;
   /* 弹性缓动 - 图标跳动感 */
-  transition: 
+  transition:
     transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 300ms ease;
   filter: brightness(var(--icon-brightness, 1));
@@ -524,9 +643,9 @@ const iconClass = computed(() => {
 }
 
 .neon-icon.size-sm {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.625rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
 }
 
 .neon-icon.size-md {
@@ -541,21 +660,46 @@ const iconClass = computed(() => {
   border-radius: 0.75rem;
 }
 
-.neon-icon.icon-centered {
-  margin: 0 auto 0.5rem;
-}
-
 .cyber-card:hover .neon-icon {
   transform: scale(1.1) rotate(-2deg);
-  box-shadow: 
+  box-shadow:
     0 6px 20px -4px hsl(var(--neon-cyan) / 0.35),
     0 0 15px -3px hsl(var(--neon-cyan) / 0.25);
+}
+
+/* Compact 模式图标 hover */
+.cyber-card.layout-compact:hover .neon-icon {
+  transform: scale(1.08);
 }
 
 .icon-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 图标加载骨架屏 */
+.icon-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: inherit;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .icon-text {
@@ -599,9 +743,8 @@ const iconClass = computed(() => {
   text-shadow: 0 0 12px hsl(var(--neon-cyan) / 0.4);
 }
 
-.title-compact,
-.title-minimal {
-  font-size: 0.8125rem;
+.title-compact {
+  font-size: 0.75rem;
 }
 
 .title-normal,
@@ -687,6 +830,14 @@ const iconClass = computed(() => {
   outline-offset: 2px;
 }
 
+/* Minimal 模式焦点状态 */
+.cyber-card.layout-minimal:focus .minimal-icon,
+.cyber-card.layout-minimal:focus-visible .minimal-icon {
+  box-shadow:
+    0 0 0 3px hsl(var(--neon-cyan) / 0.3),
+    0 8px 20px -4px hsl(var(--neon-cyan) / 0.4);
+}
+
 /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
   .cyber-card {
@@ -700,5 +851,47 @@ const iconClass = computed(() => {
   .cyber-card:focus {
     box-shadow: var(--site-card-shadow-hover);
   }
+
+  .cyber-card.layout-minimal:hover .minimal-icon {
+    transform: none;
+  }
+
+  .cyber-card.layout-minimal:hover .minimal-name {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* ========== 浅色主题适配 ========== */
+[data-theme="light"] .minimal-name {
+  background: hsl(220 15% 98% / 0.95);
+  border-color: hsl(220 15% 85%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .minimal-name span {
+  color: hsl(220 45% 15%);
+}
+
+/* ========== 素描浅色主题适配 ========== */
+[data-theme="sketch-light"] .minimal-name {
+  background: hsl(40 20% 98% / 0.95);
+  border-color: hsl(40 15% 80%);
+  box-shadow: 0 4px 12px rgba(60, 50, 40, 0.1);
+}
+
+[data-theme="sketch-light"] .minimal-name span {
+  color: hsl(40 12% 20%);
+}
+
+/* ========== 素描深色主题适配 ========== */
+[data-theme="sketch-dark"] .minimal-name {
+  background: hsl(35 15% 12% / 0.95);
+  border-color: hsl(35 10% 25%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="sketch-dark"] .minimal-name span {
+  color: hsl(40 10% 90%);
 }
 </style>
