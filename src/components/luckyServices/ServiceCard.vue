@@ -1008,6 +1008,7 @@ const ariaLabel = computed(() => {
   font-size: 0.875rem;
   font-weight: 600;
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .in-value {
@@ -1021,6 +1022,7 @@ const ariaLabel = computed(() => {
 .stat-speed {
   font-size: 0.625rem;
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .in-speed {
@@ -1222,6 +1224,7 @@ const ariaLabel = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .compact-stat-icon {
@@ -1242,6 +1245,7 @@ const ariaLabel = computed(() => {
   font-weight: 600;
   color: hsl(var(--text-secondary));
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 /* Compact 布局 - STUN 公网地址 */
@@ -1451,6 +1455,7 @@ const ariaLabel = computed(() => {
   padding: 0.25rem 0.625rem;
   border-radius: 9999px;
   border: 1px solid;
+  white-space: nowrap;
 }
 
 .list-status {
@@ -1466,6 +1471,7 @@ const ariaLabel = computed(() => {
   padding: 0.25rem 0.625rem;
   border-radius: 9999px;
   border: 1px solid;
+  white-space: nowrap;
 }
 
 .status-dot-sm {
@@ -1489,6 +1495,7 @@ const ariaLabel = computed(() => {
   padding: 0.25rem 0.5rem;
   border-radius: 0.375rem;
   background: hsl(var(--glass-bg));
+  white-space: nowrap;
 }
 
 .list-stat.network-down {
@@ -1517,6 +1524,7 @@ const ariaLabel = computed(() => {
   font-weight: 600;
   color: hsl(var(--text-secondary));
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .list-stats-placeholder {

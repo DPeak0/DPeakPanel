@@ -906,6 +906,7 @@ const ariaLabel = computed(() => {
   font-size: 1.125rem;
   font-weight: 700;
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .stat-unit {
@@ -987,6 +988,7 @@ const ariaLabel = computed(() => {
   color: hsl(var(--text-secondary));
   font-weight: 500;
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 /* 停止状态 */
@@ -1121,6 +1123,7 @@ const ariaLabel = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  white-space: nowrap;
 }
 
 .compact-stat-icon {
@@ -1137,6 +1140,7 @@ const ariaLabel = computed(() => {
   font-weight: 600;
   color: hsl(var(--text-secondary));
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .compact-offline {
@@ -1227,6 +1231,7 @@ const ariaLabel = computed(() => {
   padding: 0.25rem 0.625rem;
   border-radius: 9999px;
   border: 1px solid;
+  white-space: nowrap;
 }
 
 .status-duration-list {
@@ -1256,6 +1261,7 @@ const ariaLabel = computed(() => {
   padding: 0.25rem 0.5rem;
   border-radius: 0.375rem;
   background: hsl(var(--glass-bg));
+  white-space: nowrap;
 }
 
 .list-stat.network-down {
@@ -1288,6 +1294,7 @@ const ariaLabel = computed(() => {
   font-weight: 600;
   color: hsl(var(--text-secondary));
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
 }
 
 .list-stats-placeholder {
