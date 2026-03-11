@@ -19,6 +19,12 @@ import { Settings } from 'lucide-vue-next'
 const navStore = useNavStore()
 const configStore = useConfigStore()
 
+const EMPTY_STATE_CONFIG = {
+  icon: '🗂️',
+  title: '暂无可用内容',
+  description: '当前没有可显示的站点、Docker 容器或 Lucky 服务。'
+} as const
+
 // 链接下拉菜单组件引用
 const linkDropdownRef = ref<InstanceType<typeof LinkDropdown> | null>(null)
 
@@ -33,27 +39,37 @@ provide('linkDropdown', {
 const isLoading = computed(() => navStore.isLoading)
 const currentTab = computed(() => configStore.currentTab)
 
-// 各标签页是否有数据
-const hasSites = computed(() => navStore.sitesEnabled && navStore.allSites.length > 0)
+// 各标签页是否可见
+const hasSites = computed(() => navStore.sitesEnabled)
 const hasDocker = computed(() => navStore.dockerEnabled && navStore.allContainers.length > 0)
 const hasLuckyServices = computed(() => navStore.luckyServicesEnabled && navStore.allLuckyServices.length > 0)
 const showHeader = computed(() => configStore.showHeader)
+const availableTabs = computed<TabType[]>(() => {
+  const tabs: TabType[] = []
+
+  if (hasSites.value) {
+    tabs.push('sites')
+  }
+  if (hasDocker.value) {
+    tabs.push('docker')
+  }
+  if (hasLuckyServices.value) {
+    tabs.push('luckyServices')
+  }
+
+  return tabs
+})
+const showGlobalEmptyState = computed(() => !isLoading.value && availableTabs.value.length === 0)
 
 // 获取第一个可用的标签页
 function getFirstAvailableTab(): TabType | null {
-  if (navStore.sitesEnabled) return 'sites'
-  if (navStore.dockerEnabled) return 'docker'
-  if (navStore.luckyServicesEnabled) return 'luckyServices'
-  return null
+  return availableTabs.value[0] ?? null
 }
 
 // 检查并修正当前标签页
 function ensureValidTab() {
   const tab = currentTab.value
-  const isCurrentTabValid =
-    (tab === 'sites' && navStore.sitesEnabled) ||
-    (tab === 'docker' && navStore.dockerEnabled) ||
-    (tab === 'luckyServices' && navStore.luckyServicesEnabled)
+  const isCurrentTabValid = availableTabs.value.includes(tab)
 
   if (!isCurrentTabValid) {
     const firstTab = getFirstAvailableTab()
@@ -112,30 +128,53 @@ watch(
 
 // 初始化
 onMounted(async () => {
+  navStore.isLoading = true
+
   // 先加载本地配置（包含默认值）
   configStore.loadConfig()
 
-  // 加载基础配置（nav.json）和服务器配置
-  const [, serverConfig] = await Promise.all([
-    navStore.loadNavConfig(),
-    navStore.fetchServerConfig()
-  ])
+  try {
+    // 加载基础配置（nav.json）和服务器配置
+    const [, serverConfig] = await Promise.all([
+      navStore.loadNavConfig(),
+      navStore.fetchServerConfig()
+    ])
 
-  // 尝试应用服务器配置
-  if (serverConfig) {
-    configStore.applyServerConfig(serverConfig)
+    // 尝试应用服务器配置
+    if (serverConfig) {
+      configStore.applyServerConfig(serverConfig)
+    }
+
+    // 如果当前是自动或混合模式，调用接口重新识别网络类型
+    const mode = configStore.networkMode
+    if (mode === 'auto' || mode === 'hybrid') {
+      await navStore.fetchNetworkType()
+    }
+
+    // 预加载已启用模块的数据，用于决定顶部页签是否显示
+    const preloadTasks: Promise<unknown>[] = []
+
+    if (navStore.sitesEnabled) {
+      preloadTasks.push(navStore.loadSitesData())
+    }
+    if (navStore.dockerEnabled) {
+      preloadTasks.push(navStore.loadDockerData())
+    }
+    if (navStore.luckyServicesEnabled) {
+      preloadTasks.push(navStore.loadLuckyServicesData())
+    }
+
+    await Promise.all(preloadTasks)
+
+    // 检查当前标签页是否有效，无效则切换到第一个可用标签页
+    ensureValidTab()
+  } finally {
+    navStore.isLoading = false
   }
+})
 
-  // 如果当前是自动或混合模式，调用接口重新识别网络类型
-  const mode = configStore.networkMode
-  if (mode === 'auto' || mode === 'hybrid') {
-    await navStore.fetchNetworkType()
-  }
-
-  // 检查当前标签页是否有效，无效则切换到第一个可用标签页
+watch(availableTabs, () => {
   ensureValidTab()
-
-  // 数据加载由 ContentTabs 组件的 watch 统一处理
 })
 </script>
 
@@ -177,7 +216,7 @@ onMounted(async () => {
     </button>
 
     <!-- 搜索栏（仅在站点页面显示） -->
-    <SearchBar v-if="configStore.showSearch && currentTab === 'sites'" />
+    <SearchBar v-if="configStore.showSearch && currentTab === 'sites' && hasSites" />
 
     <!-- 主区域 -->
     <main class="main-content" :class="{ 'no-header': !showHeader }">
@@ -192,6 +231,12 @@ onMounted(async () => {
 
       <!-- Lucky 服务网格 -->
       <ServiceGrid v-else-if="currentTab === 'luckyServices' && hasLuckyServices" />
+
+      <div v-else-if="showGlobalEmptyState" class="global-empty-state">
+        <div class="global-empty-icon">{{ EMPTY_STATE_CONFIG.icon }}</div>
+        <h2 class="global-empty-title">{{ EMPTY_STATE_CONFIG.title }}</h2>
+        <p class="global-empty-description">{{ EMPTY_STATE_CONFIG.description }}</p>
+      </div>
     </main>
 
     <!-- 设置面板 -->
@@ -225,6 +270,49 @@ onMounted(async () => {
   padding-top: 1rem;
 }
 
+.global-empty-state {
+  min-height: min(48vh, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: 1.5rem;
+  background: hsl(var(--glass-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.global-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.18) 0%, hsl(var(--primary-dark) / 0.08) 100%);
+  font-size: 2rem;
+}
+
+.global-empty-title {
+  margin: 0;
+  color: hsl(var(--text-primary));
+  font-size: clamp(1.25rem, 2vw, 1.6rem);
+  font-weight: 700;
+}
+
+.global-empty-description {
+  margin: 0;
+  max-width: 32rem;
+  color: hsl(var(--text-secondary));
+  line-height: 1.6;
+}
+
 @media (min-width: 640px) {
   .main-content {
     padding: 0.75rem 1.5rem 2.5rem;
@@ -239,6 +327,12 @@ onMounted(async () => {
 @media (max-width: 480px) {
   .main-content .mb-16 {
     margin-bottom: 0.75rem;
+  }
+
+  .global-empty-state {
+    min-height: 42vh;
+    padding: 1.5rem 1rem;
+    border-radius: 1.25rem;
   }
 }
 

@@ -16,12 +16,14 @@ const availableTabs = computed(() => {
   if (navStore.sitesEnabled) {
     tabs.push({ key: 'sites', label: '站点', icon: Globe })
   }
-  // Docker
-  if (navStore.dockerEnabled) {
+
+  // Docker 仅在有容器数据时显示
+  if (navStore.dockerEnabled && navStore.allContainers.length > 0) {
     tabs.push({ key: 'docker', label: 'Docker', icon: Container })
   }
-  // Lucky 服务
-  if (navStore.luckyServicesEnabled) {
+
+  // Lucky 服务仅在有服务数据时显示
+  if (navStore.luckyServicesEnabled && navStore.allLuckyServices.length > 0) {
     tabs.push({ key: 'luckyServices', label: 'Lucky 服务', icon: Server })
   }
 
@@ -36,20 +38,32 @@ function switchTab(tab: TabType) {
   configStore.setCurrentTab(tab)
 }
 
-// 监听标签页变化，加载数据并控制轮询
-watch(currentTab, async (newTab: TabType) => {
+// 监听标签页和初始化加载状态，加载数据并控制轮询
+watch([currentTab, () => navStore.isLoading], async ([newTab, isLoading], [oldTab, wasLoading]) => {
+  if (isLoading) {
+    return
+  }
+
   // 停止所有轮询
   navStore.stopDockerStatsPolling()
   navStore.stopLuckyServicesStatsPolling()
 
+  const shouldRefreshCurrentTab = wasLoading === true || oldTab !== newTab
+
   // 按需加载数据
   if (newTab === 'sites' && navStore.sitesEnabled) {
-    await navStore.loadSitesData()
+    if (shouldRefreshCurrentTab || !navStore.sitesData) {
+      await navStore.loadSitesData()
+    }
   } else if (newTab === 'docker' && navStore.dockerEnabled) {
-    await navStore.loadDockerData()
+    if (shouldRefreshCurrentTab || !navStore.dockerData) {
+      await navStore.loadDockerData()
+    }
     navStore.startDockerStatsPolling()
   } else if (newTab === 'luckyServices' && navStore.luckyServicesEnabled) {
-    await navStore.loadLuckyServicesData()
+    if (shouldRefreshCurrentTab || !navStore.luckyServicesData) {
+      await navStore.loadLuckyServicesData()
+    }
     navStore.startLuckyServicesStatsPolling()
   }
 }, { immediate: true })
