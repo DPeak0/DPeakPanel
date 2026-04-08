@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useNavStore } from '@/stores/nav'
 import { useConfigStore } from '@/stores/config'
@@ -19,6 +19,7 @@ const editMode = ref(false)
 const siteEditorOpen = ref(false)
 const editorCreateMode = ref(false)
 const editingSiteKey = ref<string | null>(null)
+const dragPreviewEl = ref<HTMLElement | null>(null)
 const dragState = ref<{
   siteKey: string
   sourceGroupKey: string
@@ -171,7 +172,30 @@ function handleSiteCardEdit(site: Site) {
   openSiteEditor(site.key)
 }
 
-function handleDragStart(site: Site) {
+function cleanupDragPreview() {
+  if (dragPreviewEl.value?.parentNode) {
+    dragPreviewEl.value.parentNode.removeChild(dragPreviewEl.value)
+  }
+  dragPreviewEl.value = null
+}
+
+function createDragPreview(source: HTMLElement) {
+  cleanupDragPreview()
+
+  const preview = source.cloneNode(true) as HTMLElement
+  preview.classList.add('drag-preview-ghost')
+  preview.style.width = `${source.offsetWidth}px`
+  preview.style.position = 'fixed'
+  preview.style.top = '-1000px'
+  preview.style.left = '-1000px'
+  preview.style.pointerEvents = 'none'
+  preview.style.zIndex = '9999'
+  document.body.appendChild(preview)
+  dragPreviewEl.value = preview
+  return preview
+}
+
+function handleDragStart(event: DragEvent, site: Site) {
   if (!editMode.value) return
 
   dragState.value = {
@@ -181,10 +205,22 @@ function handleDragStart(site: Site) {
     targetSiteKey: null,
     position: 'end'
   }
+
+  const source = event.currentTarget as HTMLElement | null
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', site.key)
+  }
+
+  if (source && event.dataTransfer) {
+    const preview = createDragPreview(source)
+    event.dataTransfer.setDragImage(preview, Math.min(72, source.offsetWidth / 2), 24)
+  }
 }
 
 function handleDragEnd() {
   dragState.value = null
+  cleanupDragPreview()
 }
 
 function handleGroupDragOver(event: DragEvent, groupKey: string) {
@@ -232,6 +268,17 @@ function isDropTarget(groupKey: string, siteKey?: string) {
   }
   return dragState.value.targetGroupKey === groupKey && !dragState.value.targetSiteKey
 }
+
+function getSqueezeClass(site: Site) {
+  if (!dragState.value?.targetSiteKey) return ''
+  if (site.key === dragState.value.siteKey || site.key === dragState.value.targetSiteKey) return ''
+  if ((site.groupKey || '') !== dragState.value.targetGroupKey) return ''
+  return dragState.value.position === 'before' ? 'squeeze-down' : 'squeeze-up'
+}
+
+onBeforeUnmount(() => {
+  cleanupDragPreview()
+})
 
 </script>
 
@@ -290,10 +337,12 @@ function isDropTarget(groupKey: string, siteKey?: string) {
               dragging: isDraggingSite(site.key),
               'drop-before': editMode && isDropTarget(item.group.key, site.key) && dragState?.position === 'before',
               'drop-after': editMode && isDropTarget(item.group.key, site.key) && dragState?.position === 'after',
+              'drop-active': editMode && isDropTarget(item.group.key, site.key),
+              [getSqueezeClass(site)]: !!getSqueezeClass(site),
               editable: editMode
             }"
             :draggable="editMode"
-            @dragstart="handleDragStart(site)"
+            @dragstart="handleDragStart($event, site)"
             @dragend="handleDragEnd"
             @dragover="handleSiteDragOver($event, site)"
             @drop.prevent="handleDrop"
@@ -331,10 +380,12 @@ function isDropTarget(groupKey: string, siteKey?: string) {
             dragging: isDraggingSite(site.key),
             'drop-before': editMode && isDropTarget(site.groupKey || '', site.key) && dragState?.position === 'before',
             'drop-after': editMode && isDropTarget(site.groupKey || '', site.key) && dragState?.position === 'after',
+            'drop-active': editMode && isDropTarget(site.groupKey || '', site.key),
+            [getSqueezeClass(site)]: !!getSqueezeClass(site),
             editable: editMode
           }"
           :draggable="editMode"
-          @dragstart="handleDragStart(site)"
+          @dragstart="handleDragStart($event, site)"
           @dragend="handleDragEnd"
           @dragover="handleSiteDragOver($event, site)"
           @drop.prevent="handleDrop"
@@ -426,11 +477,16 @@ function isDropTarget(groupKey: string, siteKey?: string) {
 
 .site-card-wrap {
   position: relative;
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity 180ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 220ms ease;
+  will-change: transform, opacity;
 }
 
 .site-card-wrap.editable {
   cursor: grab;
+  user-select: none;
 }
 
 .site-card-wrap.editable:active {
@@ -438,7 +494,40 @@ function isDropTarget(groupKey: string, siteKey?: string) {
 }
 
 .site-card-wrap.dragging {
-  opacity: 0.45;
+  opacity: 0.18;
+  transform: scale(0.965);
+  filter: saturate(0.72) blur(0.4px);
+}
+
+.site-card-wrap.dragging :deep(.cyber-card) {
+  box-shadow:
+    0 18px 46px rgb(0 0 0 / 0.24),
+    0 0 0 1px hsl(var(--neon-cyan) / 0.18);
+}
+
+.site-card-wrap.drop-active {
+  z-index: 2;
+}
+
+.site-card-wrap.drop-before,
+.site-card-wrap.drop-after {
+  transition-duration: 180ms;
+}
+
+.site-card-wrap.drop-before {
+  transform: translateY(12px) scale(0.985);
+}
+
+.site-card-wrap.drop-after {
+  transform: translateY(-12px) scale(0.985);
+}
+
+.site-card-wrap.squeeze-down {
+  transform: translateY(6px) scale(0.988);
+}
+
+.site-card-wrap.squeeze-up {
+  transform: translateY(-6px) scale(0.988);
 }
 
 .site-card-wrap.drop-before::before,
@@ -450,7 +539,9 @@ function isDropTarget(groupKey: string, siteKey?: string) {
   height: 3px;
   border-radius: 999px;
   background: linear-gradient(90deg, hsl(var(--neon-cyan)), hsl(var(--neon-blue)));
-  box-shadow: 0 0 0 3px hsl(var(--neon-cyan) / 0.1);
+  box-shadow:
+    0 0 0 3px hsl(var(--neon-cyan) / 0.1),
+    0 0 18px hsl(var(--neon-cyan) / 0.35);
   z-index: 3;
 }
 
@@ -473,7 +564,37 @@ function isDropTarget(groupKey: string, siteKey?: string) {
   border-radius: 20px;
   border: 1px dashed hsl(var(--neon-cyan) / 0.45);
   background: hsl(var(--neon-cyan) / 0.04);
+  box-shadow: inset 0 0 0 1px hsl(var(--neon-cyan) / 0.08);
   pointer-events: none;
+  animation: dropZonePulse 1.1s ease-in-out infinite;
+}
+
+.drag-preview-ghost {
+  opacity: 0.98;
+  transform: rotate(3deg) scale(1.03);
+  filter: drop-shadow(0 18px 36px rgb(0 0 0 / 0.32));
+}
+
+.drag-preview-ghost::before,
+.drag-preview-ghost::after {
+  pointer-events: none;
+}
+
+.drag-preview-ghost :deep(.cyber-card) {
+  box-shadow:
+    0 22px 54px rgb(0 0 0 / 0.34),
+    0 0 0 1px hsl(var(--neon-cyan) / 0.22);
+  border-color: hsl(var(--neon-cyan) / 0.3);
+}
+
+@keyframes dropZonePulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 480px) {
