@@ -1,3 +1,6 @@
+import type { SiteIconLibraryItem } from '@/data/siteIconLibrary'
+import type { SiteIconSource } from '@/data/siteIconSources'
+
 const FAVICON_SERVICES = [
   (hostname: string) => `https://icon.horse/icon/${hostname}`,
   (hostname: string) => `https://favicone.com/${hostname}?s=128`
@@ -91,4 +94,27 @@ export async function autoResolveSiteIcon(urls: string[]) {
 
 export function buildSimpleIconCdnUrl(slug: string) {
   return `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${slug}.svg`
+}
+
+export function buildSiteIconSourceUrl(source: SiteIconSource, item: SiteIconLibraryItem) {
+  const replacements: Record<string, string> = {
+    '{slug}': item.slug,
+    '{key}': item.key,
+    '{title}': encodeURIComponent(item.title)
+  }
+
+  let url = source.urlTemplate
+  Object.entries(replacements).forEach(([token, value]) => {
+    url = url.split(token).join(value)
+  })
+
+  return url
+}
+
+export async function downloadImageAsDataUrlOrKeepUrl(url: string) {
+  try {
+    return await downloadImageAsDataUrl(url)
+  } catch {
+    return url
+  }
 }
