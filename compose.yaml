@@ -1,0 +1,9 @@
+services:
+  lucky-light-panel:
+    container_name: lucky-light-panel
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "18080:80"
+    restart: unless-stopped
