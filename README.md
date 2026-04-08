@@ -81,13 +81,32 @@ npm run preview
 - Push `v*` 标签时自动构建版本镜像
 - Pull Request 会执行镜像构建检查，但不会推送
 
-默认推送地址为：
+镜像发布到 GitHub Container Registry：
 
 ```bash
 ghcr.io/dpeak0/dpeakpanel:latest
 ```
 
+GHCR 包页面：
+
+- `https://github.com/DPeak0/DPeakPanel/pkgs/container/dpeakpanel`
+
+常用镜像标签：
+
+```bash
+ghcr.io/dpeak0/dpeakpanel:latest
+ghcr.io/dpeak0/dpeakpanel:main
+ghcr.io/dpeak0/dpeakpanel:v1.0.0
+ghcr.io/dpeak0/dpeakpanel:sha-<commit>
+```
+
 也会同时生成分支、标签和 commit SHA 对应的镜像标签。
+
+如果拉取时报权限错误，请到 GitHub 的 package 设置里将该 GHCR 包改为 `public`，或先执行：
+
+```bash
+echo <YOUR_GITHUB_TOKEN> | docker login ghcr.io -u DPeak0 --password-stdin
+```
 
 拉取并运行示例：
 
