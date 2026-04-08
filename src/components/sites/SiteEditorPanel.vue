@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useNavStore } from '@/stores/nav'
-import { Plus, Pencil, Trash2, RotateCcw, Save, X } from 'lucide-vue-next'
+import { Trash2, Save, X } from 'lucide-vue-next'
 import type { Site } from '@/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
-}>()
+  siteKey?: string | null
+  createMode?: boolean
+}>(), {
+  siteKey: null,
+  createMode: false
+})
 
 const emit = defineEmits<{
   close: []
 }>()
 
 const navStore = useNavStore()
-
 const errorMessage = ref('')
-const isCreating = ref(false)
-const selectedSiteKey = ref('')
 
 const form = reactive({
   originalKey: '',
@@ -32,13 +34,22 @@ const form = reactive({
   target: '_blank'
 })
 
-const siteList = computed(() => navStore.editableSites)
 const groupOptions = computed(() => navStore.siteGroups.map(group => group.name))
-const hasLocalOverride = computed(() => navStore.hasLocalSitesOverride)
-
-const selectedSite = computed(() => {
-  return siteList.value.find(site => site.key === selectedSiteKey.value) || null
+const currentSite = computed(() => {
+  return props.siteKey
+    ? navStore.editableSites.find(site => site.key === props.siteKey) || null
+    : null
 })
+
+const panelTitle = computed(() => props.createMode ? '新增站点' : `编辑站点${currentSite.value ? ` · ${currentSite.value.name}` : ''}`)
+const panelSubtitle = computed(() => props.createMode
+  ? '填写站点信息后保存，即可立即出现在当前页面。'
+  : '修改当前站点卡片的信息，保存后会立即刷新展示。'
+)
+
+function getNextOrder() {
+  return navStore.editableSites.reduce((max, site) => Math.max(max, site.order || 0), 0) + 1
+}
 
 function resetForm() {
   Object.assign(form, {
@@ -57,19 +68,13 @@ function resetForm() {
   errorMessage.value = ''
 }
 
-function getNextOrder() {
-  return siteList.value.reduce((max, site) => Math.max(max, site.order || 0), 0) + 1
-}
-
 function fillForm(site: Site | null) {
   if (!site) {
-    isCreating.value = true
     resetForm()
     return
   }
 
   const groupName = navStore.siteGroups.find(group => group.key === site.groupKey)?.name || ''
-  isCreating.value = false
   errorMessage.value = ''
   Object.assign(form, {
     originalKey: site.key,
@@ -86,16 +91,6 @@ function fillForm(site: Site | null) {
   })
 }
 
-function startCreate() {
-  selectedSiteKey.value = ''
-  fillForm(null)
-}
-
-function selectSite(site: Site) {
-  selectedSiteKey.value = site.key
-  fillForm(site)
-}
-
 function parseUrls(text: string) {
   return text
     .split('\n')
@@ -103,9 +98,13 @@ function parseUrls(text: string) {
     .filter(Boolean)
 }
 
+function closePanel() {
+  emit('close')
+}
+
 function handleSave() {
   try {
-    const savedKey = navStore.saveSite({
+    navStore.saveSite({
       originalKey: form.originalKey || undefined,
       key: form.key,
       name: form.name,
@@ -118,11 +117,7 @@ function handleSave() {
       enable: form.enable,
       target: form.target
     })
-
-    selectedSiteKey.value = savedKey || form.originalKey || ''
-    if (selectedSite.value) {
-      fillForm(selectedSite.value)
-    }
+    closePanel()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '保存失败'
   }
@@ -135,63 +130,21 @@ function handleDelete() {
   if (!confirmed) return
 
   navStore.deleteSite(form.originalKey)
-  startCreate()
-}
-
-function handleResetOverride() {
-  const confirmed = window.confirm('确认恢复为服务器原始站点数据吗？本地编辑内容将被清空。')
-  if (!confirmed) return
-
-  navStore.resetSitesOverride()
-  if (siteList.value[0]) {
-    selectSite(siteList.value[0])
-  } else {
-    startCreate()
-  }
-}
-
-function closePanel() {
-  emit('close')
+  closePanel()
 }
 
 watch(
-  () => props.open,
-  (open) => {
+  () => [props.open, props.siteKey, props.createMode, navStore.siteGroups.length] as const,
+  ([open]) => {
     if (!open) return
-
-    if (selectedSiteKey.value) {
-      const current = siteList.value.find(site => site.key === selectedSiteKey.value)
-      if (current) {
-        fillForm(current)
-        return
-      }
+    if (props.createMode) {
+      resetForm()
+      return
     }
-
-    if (siteList.value[0]) {
-      selectSite(siteList.value[0])
-    } else {
-      startCreate()
-    }
+    fillForm(currentSite.value)
   },
   { immediate: true }
 )
-
-watch(siteList, (sites) => {
-  if (!props.open) return
-
-  if (selectedSiteKey.value) {
-    const current = sites.find(site => site.key === selectedSiteKey.value)
-    if (current) {
-      return
-    }
-  }
-
-  if (sites[0]) {
-    selectSite(sites[0])
-  } else {
-    startCreate()
-  }
-})
 </script>
 
 <template>
@@ -217,135 +170,101 @@ watch(siteList, (sites) => {
     <div v-if="open" class="editor-panel">
       <div class="editor-header">
         <div>
-          <h2 class="editor-title">站点编辑</h2>
-          <p class="editor-subtitle">可直接新增、修改、删除站点，改动保存在当前浏览器。</p>
+          <h2 class="editor-title">{{ panelTitle }}</h2>
+          <p class="editor-subtitle">{{ panelSubtitle }}</p>
         </div>
         <button class="icon-btn close-btn" @click="closePanel">
           <X class="icon-sm" />
         </button>
       </div>
 
-      <div class="editor-toolbar">
-        <button class="toolbar-btn primary" @click="startCreate">
-          <Plus class="icon-sm" />
-          新增站点
-        </button>
-        <button v-if="hasLocalOverride" class="toolbar-btn secondary" @click="handleResetOverride">
-          <RotateCcw class="icon-sm" />
-          恢复服务器数据
-        </button>
-      </div>
+      <div class="editor-form">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">站点名称</span>
+            <input v-model.trim="form.name" class="field-input" type="text" placeholder="例如：GitHub" />
+          </label>
 
-      <div class="editor-body">
-        <aside class="site-list">
-          <button
-            v-for="site in siteList"
-            :key="site.key"
-            class="site-list-item"
-            :class="{ active: site.key === selectedSiteKey && !isCreating }"
-            @click="selectSite(site)"
-          >
-            <div class="site-list-main">
-              <span class="site-list-name">{{ site.name }}</span>
-              <span class="site-list-group">
-                {{ navStore.siteGroups.find(group => group.key === site.groupKey)?.name || '未分组' }}
-              </span>
-            </div>
-            <Pencil class="icon-xs" />
+          <label class="field">
+            <span class="field-label">站点 Key</span>
+            <input v-model.trim="form.key" class="field-input" type="text" placeholder="留空时根据名称自动生成" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">分组名称</span>
+            <input
+              v-model.trim="form.groupName"
+              class="field-input"
+              type="text"
+              list="site-group-options"
+              placeholder="例如：开发工具"
+            />
+            <datalist id="site-group-options">
+              <option v-for="group in groupOptions" :key="group" :value="group" />
+            </datalist>
+          </label>
+
+          <label class="field">
+            <span class="field-label">排序</span>
+            <input v-model.number="form.order" class="field-input" type="number" min="0" />
+          </label>
+
+          <label class="field field-full">
+            <span class="field-label">描述</span>
+            <input v-model.trim="form.description" class="field-input" type="text" placeholder="站点说明，可选" />
+          </label>
+
+          <label class="field field-full">
+            <span class="field-label">图标地址</span>
+            <input v-model.trim="form.iconUrl" class="field-input" type="text" placeholder="支持 URL 或 iconlibs 路径" />
+          </label>
+
+          <label class="field field-full">
+            <span class="field-label">外网链接</span>
+            <textarea
+              v-model="form.frontendUrlsText"
+              class="field-textarea"
+              rows="4"
+              placeholder="每行一个链接，例如：https://github.com"
+            />
+          </label>
+
+          <label class="field field-full">
+            <span class="field-label">内网链接</span>
+            <textarea
+              v-model="form.backendUrlsText"
+              class="field-textarea"
+              rows="4"
+              placeholder="每行一个链接，例如：http://192.168.1.10:3000"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">打开方式</span>
+            <select v-model="form.target" class="field-input">
+              <option value="_blank">新标签页</option>
+              <option value="_self">当前页</option>
+            </select>
+          </label>
+
+          <label class="field toggle-field">
+            <span class="field-label">启用站点</span>
+            <input v-model="form.enable" class="toggle-input" type="checkbox" />
+          </label>
+        </div>
+
+        <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+
+        <div class="form-actions">
+          <button class="action-btn primary" @click="handleSave">
+            <Save class="icon-sm" />
+            保存站点
           </button>
-          <div v-if="siteList.length === 0" class="site-list-empty">
-            暂无站点，点击“新增站点”开始创建。
-          </div>
-        </aside>
-
-        <section class="editor-form">
-          <div class="form-grid">
-            <label class="field">
-              <span class="field-label">站点名称</span>
-              <input v-model.trim="form.name" class="field-input" type="text" placeholder="例如：GitHub" />
-            </label>
-
-            <label class="field">
-              <span class="field-label">站点 Key</span>
-              <input v-model.trim="form.key" class="field-input" type="text" placeholder="留空时根据名称自动生成" />
-            </label>
-
-            <label class="field">
-              <span class="field-label">分组名称</span>
-              <input
-                v-model.trim="form.groupName"
-                class="field-input"
-                type="text"
-                list="site-group-options"
-                placeholder="例如：开发工具"
-              />
-              <datalist id="site-group-options">
-                <option v-for="group in groupOptions" :key="group" :value="group" />
-              </datalist>
-            </label>
-
-            <label class="field">
-              <span class="field-label">排序</span>
-              <input v-model.number="form.order" class="field-input" type="number" min="0" />
-            </label>
-
-            <label class="field field-full">
-              <span class="field-label">描述</span>
-              <input v-model.trim="form.description" class="field-input" type="text" placeholder="站点说明，可选" />
-            </label>
-
-            <label class="field field-full">
-              <span class="field-label">图标地址</span>
-              <input v-model.trim="form.iconUrl" class="field-input" type="text" placeholder="支持 URL 或 iconlibs 路径" />
-            </label>
-
-            <label class="field field-full">
-              <span class="field-label">外网链接</span>
-              <textarea
-                v-model="form.frontendUrlsText"
-                class="field-textarea"
-                rows="4"
-                placeholder="每行一个链接，例如：https://github.com"
-              />
-            </label>
-
-            <label class="field field-full">
-              <span class="field-label">内网链接</span>
-              <textarea
-                v-model="form.backendUrlsText"
-                class="field-textarea"
-                rows="4"
-                placeholder="每行一个链接，例如：http://192.168.1.10:3000"
-              />
-            </label>
-
-            <label class="field">
-              <span class="field-label">打开方式</span>
-              <select v-model="form.target" class="field-input">
-                <option value="_blank">新标签页</option>
-                <option value="_self">当前页</option>
-              </select>
-            </label>
-
-            <label class="field toggle-field">
-              <span class="field-label">启用站点</span>
-              <input v-model="form.enable" class="toggle-input" type="checkbox" />
-            </label>
-          </div>
-
-          <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-
-          <div class="form-actions">
-            <button class="toolbar-btn primary" @click="handleSave">
-              <Save class="icon-sm" />
-              保存站点
-            </button>
-            <button v-if="form.originalKey" class="toolbar-btn danger" @click="handleDelete">
-              <Trash2 class="icon-sm" />
-              删除站点
-            </button>
-          </div>
-        </section>
+          <button v-if="form.originalKey" class="action-btn danger" @click="handleDelete">
+            <Trash2 class="icon-sm" />
+            删除站点
+          </button>
+        </div>
       </div>
     </div>
   </Transition>
@@ -355,15 +274,19 @@ watch(siteList, (sites) => {
 .editor-overlay {
   position: fixed;
   inset: 0;
-  background: rgb(5 10 20 / 0.6);
+  background: rgb(5 10 20 / 0.62);
   backdrop-filter: blur(8px);
   z-index: 90;
 }
 
 .editor-panel {
   position: fixed;
-  inset: 4vh 4vw;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 91;
+  width: min(860px, calc(100vw - 2rem));
+  max-height: min(88vh, 860px);
   display: flex;
   flex-direction: column;
   border-radius: 24px;
@@ -396,71 +319,8 @@ watch(siteList, (sites) => {
   font-size: 0.95rem;
 }
 
-.editor-toolbar {
-  display: flex;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid hsl(var(--glass-border));
-}
-
-.editor-body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-}
-
-.site-list {
-  padding: 1rem;
-  border-right: 1px solid hsl(var(--glass-border));
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.site-list-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  border-radius: 16px;
-  border: 1px solid hsl(var(--glass-border));
-  background: transparent;
-  color: hsl(var(--text-primary));
-  cursor: pointer;
-  transition: all 180ms ease;
-  text-align: left;
-}
-
-.site-list-item:hover,
-.site-list-item.active {
-  border-color: hsl(var(--neon-cyan) / 0.45);
-  background: hsl(var(--glass-bg-hover));
-  box-shadow: 0 0 0 1px hsl(var(--neon-cyan) / 0.15);
-}
-
-.site-list-main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.site-list-name {
-  font-weight: 600;
-}
-
-.site-list-group,
-.site-list-empty {
-  font-size: 0.875rem;
-  color: hsl(var(--text-secondary));
-}
-
 .editor-form {
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem 1.5rem 1.5rem;
   overflow-y: auto;
 }
 
@@ -529,7 +389,7 @@ watch(siteList, (sites) => {
   margin-top: 1.25rem;
 }
 
-.toolbar-btn,
+.action-btn,
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -542,26 +402,25 @@ watch(siteList, (sites) => {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
-.toolbar-btn:hover,
+.action-btn:hover,
 .icon-btn:hover {
   transform: translateY(-1px);
 }
 
-.toolbar-btn.primary {
+.action-btn.primary {
   background: linear-gradient(135deg, hsl(var(--neon-cyan) / 0.18), hsl(var(--neon-blue) / 0.18));
   color: hsl(var(--text-primary));
   border-color: hsl(var(--neon-cyan) / 0.25);
 }
 
-.toolbar-btn.secondary,
-.icon-btn,
-.toolbar-btn.danger {
+.action-btn.danger,
+.icon-btn {
   background: transparent;
   color: hsl(var(--text-primary));
   border-color: hsl(var(--glass-border));
 }
 
-.toolbar-btn.danger {
+.action-btn.danger {
   color: hsl(var(--danger));
 }
 
@@ -572,12 +431,6 @@ watch(siteList, (sites) => {
 .icon-sm {
   width: 1rem;
   height: 1rem;
-}
-
-.icon-xs {
-  width: 0.9rem;
-  height: 0.9rem;
-  flex-shrink: 0;
 }
 
 .overlay-enter,
@@ -595,26 +448,20 @@ watch(siteList, (sites) => {
 .panel-enter-from,
 .panel-leave-to {
   opacity: 0;
-  transform: translateY(14px) scale(0.98);
+  transform: translate(-50%, calc(-50% + 14px)) scale(0.98);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 720px) {
   .editor-panel {
-    inset: 1.5vh 1.5vw;
-  }
-
-  .editor-body {
-    grid-template-columns: 1fr;
-  }
-
-  .site-list {
-    max-height: 240px;
-    border-right: none;
-    border-bottom: 1px solid hsl(var(--glass-border));
+    width: calc(100vw - 1rem);
   }
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
   }
 }
 </style>

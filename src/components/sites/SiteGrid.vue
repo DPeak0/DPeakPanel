@@ -9,13 +9,16 @@ import SearchBox from '@/components/common/SearchBox.vue'
 import GroupDropdown from '@/components/common/GroupDropdown.vue'
 import NetworkModeDropdown from '@/components/common/NetworkModeDropdown.vue'
 import LayoutSwitcher from '@/components/common/LayoutSwitcher.vue'
-import { Pencil, CircleAlert } from 'lucide-vue-next'
+import { Pencil, CircleAlert, Plus, Check, RotateCcw } from 'lucide-vue-next'
 import type { Site, Group } from '@/types'
 
 const navStore = useNavStore()
 const configStore = useConfigStore()
 const { searchKeywords } = storeToRefs(configStore)
+const editMode = ref(false)
 const siteEditorOpen = ref(false)
+const editorCreateMode = ref(false)
+const editingSiteKey = ref<string | null>(null)
 
 // 搜索关键字
 const searchKeyword = computed({
@@ -133,12 +136,39 @@ const gridClass = computed(() => {
   }
 })
 
-function openSiteEditor() {
+function openSiteEditor(siteKey?: string) {
+  editingSiteKey.value = siteKey || null
+  editorCreateMode.value = !siteKey
   siteEditorOpen.value = true
 }
 
 function closeSiteEditor() {
   siteEditorOpen.value = false
+  editingSiteKey.value = null
+  editorCreateMode.value = false
+}
+
+function toggleEditMode() {
+  editMode.value = !editMode.value
+  if (!editMode.value) {
+    closeSiteEditor()
+  }
+}
+
+function openCreateSiteEditor() {
+  openSiteEditor()
+}
+
+function handleSiteCardEdit(site: Site) {
+  if (!editMode.value) return
+  openSiteEditor(site.key)
+}
+
+function resetLocalSites() {
+  const confirmed = window.confirm('确认恢复为服务器原始站点数据吗？本地编辑内容将被清空。')
+  if (!confirmed) return
+  navStore.resetSitesOverride()
+  closeSiteEditor()
 }
 
 </script>
@@ -153,11 +183,24 @@ function closeSiteEditor() {
         color="cyan"
       />
       <div class="filter-bar-right">
-        <button class="site-editor-btn" @click="openSiteEditor">
+        <button class="site-editor-btn" :class="{ active: editMode }" @click="toggleEditMode">
+          <Check v-if="editMode" class="toolbar-icon" />
           <Pencil class="toolbar-icon" />
-          编辑
+          {{ editMode ? '完成编辑' : '编辑' }}
         </button>
-        <div v-if="navStore.hasLocalSitesOverride" class="override-badge">
+        <button v-if="editMode" class="site-editor-btn secondary" @click="openCreateSiteEditor">
+          <Plus class="toolbar-icon" />
+          新增站点
+        </button>
+        <button
+          v-if="editMode && navStore.hasLocalSitesOverride"
+          class="site-editor-btn secondary warning"
+          @click="resetLocalSites"
+        >
+          <RotateCcw class="toolbar-icon" />
+          恢复数据
+        </button>
+        <div v-else-if="navStore.hasLocalSitesOverride" class="override-badge">
           <CircleAlert class="toolbar-icon" />
           已本地修改
         </div>
@@ -189,7 +232,9 @@ function closeSiteEditor() {
             v-for="site in item.sites"
             :key="site.key"
             :site="site"
+            :editable="editMode"
             class="animate-fade-in-up"
+            @edit="handleSiteCardEdit(site)"
           />
         </div>
       </div>
@@ -210,7 +255,9 @@ function closeSiteEditor() {
           v-for="site in filteredSites"
           :key="site.key"
           :site="site"
+          :editable="editMode"
           class="animate-fade-in-up"
+          @edit="handleSiteCardEdit(site)"
         />
       </div>
       <!-- 空状态 -->
@@ -222,7 +269,12 @@ function closeSiteEditor() {
       </div>
     </template>
 
-    <SiteEditorPanel :open="siteEditorOpen" @close="closeSiteEditor" />
+    <SiteEditorPanel
+      :open="siteEditorOpen"
+      :site-key="editingSiteKey"
+      :create-mode="editorCreateMode"
+      @close="closeSiteEditor"
+    />
   </div>
 </template>
 
@@ -265,6 +317,19 @@ function closeSiteEditor() {
 .site-editor-btn {
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.site-editor-btn.active {
+  border-color: hsl(var(--neon-cyan) / 0.5);
+  background: linear-gradient(135deg, hsl(var(--neon-cyan) / 0.18), hsl(var(--neon-blue) / 0.18));
+}
+
+.site-editor-btn.secondary {
+  background: transparent;
+}
+
+.site-editor-btn.warning {
+  color: hsl(var(--warning));
 }
 
 .site-editor-btn:hover {

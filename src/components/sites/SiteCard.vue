@@ -3,7 +3,7 @@ import { computed, inject, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
 import { useNavStore } from '@/stores/nav'
-import { ArrowUpRight } from 'lucide-vue-next'
+import { ArrowUpRight, Pencil } from 'lucide-vue-next'
 import type { Site } from '@/types'
 
 interface LinkItem {
@@ -14,6 +14,11 @@ interface LinkItem {
 
 const props = defineProps<{
   site: Site
+  editable?: boolean
+}>()
+
+const emit = defineEmits<{
+  edit: []
 }>()
 
 const configStore = useConfigStore()
@@ -134,6 +139,11 @@ function getBestUrl(): string | null {
 function handleClick(event: MouseEvent) {
   event.preventDefault()
 
+  if (props.editable) {
+    emit('edit')
+    return
+  }
+
   const effectiveType = getEffectiveNetworkType()
   const { frontendUrls = [], backendUrls = [] } = props.site
   const validFrontend = frontendUrls.filter(u => u && u.trim())
@@ -198,7 +208,8 @@ function handleKeydown(event: KeyboardEvent) {
 
 // 可访问性标签
 const ariaLabel = computed(() => {
-  const parts = [`打开 ${props.site.name}`]
+  const action = props.editable ? '编辑' : '打开'
+  const parts = [`${action} ${props.site.name}`]
   if (props.site.description) {
     parts.push(props.site.description)
   }
@@ -293,6 +304,7 @@ const iconClass = computed(() => {
 <template>
   <div
     :class="cardClass"
+    :data-editable="props.editable ? 'true' : 'false'"
     role="button"
     :tabindex="0"
     :aria-label="ariaLabel"
@@ -301,6 +313,9 @@ const iconClass = computed(() => {
   >
     <!-- 边框发光线 -->
     <div class="card-border-glow" />
+    <div v-if="props.editable" class="card-edit-badge">
+      <Pencil class="card-edit-icon" />
+    </div>
 
     <!-- ========== Minimal 布局：纯图标模式 ========== -->
     <template v-if="layout === 'minimal'">
@@ -409,6 +424,11 @@ const iconClass = computed(() => {
   display: block;
   text-decoration: none;
   cursor: pointer;
+}
+
+.cyber-card[data-editable='true'] {
+  outline: 1px dashed hsl(var(--neon-cyan) / 0.35);
+  outline-offset: -6px;
 }
 
 /* 磨砂内层叠加 - 增强通透感 */
@@ -593,6 +613,29 @@ const iconClass = computed(() => {
 
 .cyber-card:hover .card-border-glow {
   opacity: 1;
+}
+
+.card-edit-badge {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--neon-cyan) / 0.28);
+  background: hsl(var(--glass-bg));
+  color: hsl(var(--neon-cyan));
+  box-shadow: 0 0 0 1px hsl(var(--neon-cyan) / 0.08);
+  pointer-events: none;
+}
+
+.card-edit-icon {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 /* 内容容器 */
