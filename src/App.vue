@@ -9,7 +9,6 @@ import AppHeader from '@/components/layout/AppHeader.vue'
 import ContentTabs from '@/components/common/ContentTabs.vue'
 import SiteGrid from '@/components/sites/SiteGrid.vue'
 import DockerGrid from '@/components/docker/DockerGrid.vue'
-import ServiceGrid from '@/components/luckyServices/ServiceGrid.vue'
 import SettingsPanel from '@/components/settings/SettingsPanel.vue'
 import BackToTop from '@/components/common/BackToTop.vue'
 import LinkDropdown from '@/components/common/LinkDropdown.vue'
@@ -22,7 +21,7 @@ const configStore = useConfigStore()
 const EMPTY_STATE_CONFIG = {
   icon: '🗂️',
   title: '暂无可用内容',
-  description: '当前没有可显示的站点、Docker 容器或 Lucky 服务。'
+  description: '当前没有可显示的站点或 Docker 容器。'
 } as const
 
 // 链接下拉菜单组件引用
@@ -42,7 +41,6 @@ const currentTab = computed(() => configStore.currentTab)
 // 各标签页是否可见
 const hasSites = computed(() => navStore.sitesEnabled)
 const hasDocker = computed(() => navStore.dockerEnabled && navStore.allContainers.length > 0)
-const hasLuckyServices = computed(() => navStore.luckyServicesEnabled && navStore.allLuckyServices.length > 0)
 const showHeader = computed(() => configStore.showHeader)
 const availableTabs = computed<TabType[]>(() => {
   const tabs: TabType[] = []
@@ -52,9 +50,6 @@ const availableTabs = computed<TabType[]>(() => {
   }
   if (hasDocker.value) {
     tabs.push('docker')
-  }
-  if (hasLuckyServices.value) {
-    tabs.push('luckyServices')
   }
 
   return tabs
@@ -160,9 +155,6 @@ onMounted(async () => {
     if (navStore.dockerEnabled) {
       preloadTasks.push(navStore.loadDockerData())
     }
-    if (navStore.luckyServicesEnabled) {
-      preloadTasks.push(navStore.loadLuckyServicesData())
-    }
 
     await Promise.all(preloadTasks)
 
@@ -228,9 +220,6 @@ watch(availableTabs, () => {
 
       <!-- Docker 网格 -->
       <DockerGrid v-else-if="currentTab === 'docker' && hasDocker" />
-
-      <!-- Lucky 服务网格 -->
-      <ServiceGrid v-else-if="currentTab === 'luckyServices' && hasLuckyServices" />
 
       <div v-else-if="showGlobalEmptyState" class="global-empty-state">
         <div class="global-empty-icon">{{ EMPTY_STATE_CONFIG.icon }}</div>

@@ -59,19 +59,6 @@
         { "value": "minimal", "label": "极简" }
       ]
     },
-    "luckyServicesLayout": {
-      "type": "select",
-      "label": "服务布局",
-      "description": "Lucky 服务卡片的默认布局模式",
-      "default": "normal",
-      "options": [
-        { "value": "compact", "label": "紧凑" },
-        { "value": "normal", "label": "标准" },
-        { "value": "large", "label": "大号" },
-        { "value": "list", "label": "列表" },
-        { "value": "minimal", "label": "极简" }
-      ]
-    },
     "networkMode": {
       "type": "select",
       "label": "网络模式",
@@ -91,8 +78,7 @@
       "default": "sites",
       "options": [
         { "value": "sites", "label": "站点" },
-        { "value": "docker", "label": "Docker" },
-        { "value": "luckyServices", "label": "服务" }
+        { "value": "docker", "label": "Docker" }
       ]
     },
     "showDescription": {

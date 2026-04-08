@@ -6,7 +6,6 @@ export interface NavConfig {
   settings: NavSettings
   sitesEnabled?: boolean
   dockerEnabled?: boolean
-  luckyServicesEnabled?: boolean
 }
 
 /** 面板设置 */
@@ -122,57 +121,6 @@ export interface DockerStat {
   diskWriteSpeed?: number
 }
 
-// ============ Lucky 服务类型 ============
-
-/** Lucky 服务数据响应 */
-export interface LuckyServicesData {
-  groups: Group[]
-  services: LuckyService[]
-}
-
-/** Lucky 服务 */
-export interface LuckyService {
-  key: string
-  name: string
-  displayName?: string
-  description?: string
-  iconUrl?: string
-  serviceType: ServiceType
-  state?: ServiceState
-  groupKey?: string
-  order?: number
-  enable?: boolean
-  showStatus?: boolean
-  publicAddr?: string
-}
-
-/** 服务类型 */
-export type ServiceType = 'webservice' | 'webservice-main' | 'webservice-default' | 'portforward' | 'stun'
-
-/** 服务状态 */
-export type ServiceState = 'running' | 'enabled' | 'stopped' | 'disabled' | 'error' | 'unknown'
-
-/** Lucky 服务统计数据响应 */
-export interface LuckyServicesStatsResponse {
-  ret: number
-  stats: LuckyServiceStat[]
-}
-
-/** Lucky 服务统计 */
-export interface LuckyServiceStat {
-  key: string
-  state: string
-  displayName?: string
-  iconUrl?: string
-  tcpCurrentConnections: number
-  udpCurrentConnections: number
-  trafficIn: number
-  trafficOut: number
-  inSpeed: number
-  outSpeed: number
-  publicAddr?: string
-}
-
 // ============ 网络类型 ============
 
 /** 网络类型 */
@@ -196,7 +144,7 @@ export type ThemeMode = 'light' | 'dark' | 'sketch-light' | 'sketch-dark'
 export type LayoutMode = 'compact' | 'normal' | 'large' | 'list' | 'minimal'
 
 /** 标签页 */
-export type TabType = 'sites' | 'docker' | 'luckyServices'
+export type TabType = 'sites' | 'docker'
 
 /** 分组选择值类型：支持单选(string)或多选(string[]) */
 export type GroupSelection = string | string[]
@@ -205,14 +153,12 @@ export type GroupSelection = string | string[]
 export interface TabGroups {
   sites: GroupSelection
   docker: GroupSelection
-  luckyServices: GroupSelection
 }
 
 /** 各标签页的搜索关键字 */
 export interface TabSearchKeywords {
   sites: string
   docker: string
-  luckyServices: string
 }
 
 /** 搜索引擎 */
@@ -230,7 +176,6 @@ export interface UserConfig {
   customBgUrl: string
   layout: LayoutMode
   dockerLayout: LayoutMode
-  luckyServicesLayout: LayoutMode
   showDescription: boolean
   showTime: boolean
   showSearch: boolean

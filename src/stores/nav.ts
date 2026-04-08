@@ -7,12 +7,8 @@ import type {
   DockerData,
   DockerStatsResponse,
   DockerStat,
-  LuckyServicesData,
-  LuckyServicesStatsResponse,
-  LuckyServiceStat,
   Site,
   DockerContainer,
-  LuckyService,
   Group,
   NetworkType,
   SiteEditorInput
@@ -22,10 +18,8 @@ import type {
 const API = {
   nav: './backend/nav.json',
   sites: './backend/sites.json',
-  docker: './backend/docker.json',
-  dockerStats: './backend/docker-stats.json',
-  luckyServices: './backend/luckyservices.json',
-  luckyServicesStats: './backend/luckyservices-stats.json',
+  docker: ['./backend/runtime/docker.json', './backend/docker.json'],
+  dockerStats: ['./backend/runtime/docker-stats.json', './backend/docker-stats.json'],
   networkType: './backend/api/network-type',
   config: './backend/default-config.json'
 }
@@ -105,11 +99,6 @@ export const useNavStore = defineStore('nav', () => {
   const dockerStats = ref<Map<string, DockerStat>>(new Map())
   const dockerStatsTimer = ref<ReturnType<typeof setInterval> | null>(null)
 
-  // Lucky 服务数据
-  const luckyServicesData = ref<LuckyServicesData | null>(null)
-  const luckyServicesStats = ref<Map<string, LuckyServiceStat>>(new Map())
-  const luckyServicesStatsTimer = ref<ReturnType<typeof setInterval> | null>(null)
-
   // 配置数据
   const serverConfig = ref<Record<string, any>>({}) // 服务器下发的用户配置
 
@@ -144,17 +133,6 @@ export const useNavStore = defineStore('nav', () => {
     return containers.filter((c: DockerContainer) => c.enable !== false).sort((a: DockerContainer, b: DockerContainer) => (a.order || 0) - (b.order || 0))
   })
 
-  // 计算属性：Lucky 服务分组
-  const luckyServicesGroups = computed<Group[]>(() => {
-    return luckyServicesData.value?.groups || []
-  })
-
-  // 计算属性：所有 Lucky 服务
-  const allLuckyServices = computed<LuckyService[]>(() => {
-    const services = luckyServicesData.value?.services || []
-    return services.filter((s: LuckyService) => s.enable !== false).sort((a: LuckyService, b: LuckyService) => (a.order || 0) - (b.order || 0))
-  })
-
   // 计算属性：面板标题
   const panelTitle = computed(() => {
     return navConfig.value?.settings?.title || '轻面板'
@@ -178,7 +156,6 @@ export const useNavStore = defineStore('nav', () => {
   // 计算属性：模块启用状态
   const sitesEnabled = computed(() => navConfig.value?.sitesEnabled !== false)
   const dockerEnabled = computed(() => navConfig.value?.dockerEnabled === true)
-  const luckyServicesEnabled = computed(() => navConfig.value?.luckyServicesEnabled === true)
 
   // 异步加载 JSON
   async function fetchJson<T>(url: string): Promise<T | null> {
@@ -189,6 +166,17 @@ export const useNavStore = defineStore('nav', () => {
     } catch {
       return null
     }
+  }
+
+  async function fetchJsonFromSources<T>(urls: string | string[]): Promise<T | null> {
+    const candidates = Array.isArray(urls) ? urls : [urls]
+    for (const url of candidates) {
+      const data = await fetchJson<T>(url)
+      if (data) {
+        return data
+      }
+    }
+    return null
   }
 
   function readSitesOverride(): Pick<SitesData, 'groups' | 'sites'> | null {
@@ -395,18 +383,9 @@ export const useNavStore = defineStore('nav', () => {
 
   // 加载 Docker 数据
   async function loadDockerData() {
-    const data = await fetchJson<DockerData>(API.docker)
+    const data = await fetchJsonFromSources<DockerData>(API.docker)
     if (data) {
       dockerData.value = data
-    }
-    return data
-  }
-
-  // 加载 Lucky 服务数据
-  async function loadLuckyServicesData() {
-    const data = await fetchJson<LuckyServicesData>(API.luckyServices)
-    if (data) {
-      luckyServicesData.value = data
     }
     return data
   }
@@ -422,8 +401,7 @@ export const useNavStore = defineStore('nav', () => {
       // 同时加载所有数据源
       await Promise.all([
         loadSitesData(),
-        loadDockerData(),
-        loadLuckyServicesData()
+        loadDockerData()
       ])
     } catch (e) {
       loadError.value = String(e)
@@ -488,7 +466,7 @@ export const useNavStore = defineStore('nav', () => {
 
   // 加载 Docker 统计
   async function loadDockerStats() {
-    const data = await fetchJson<DockerStatsResponse>(API.dockerStats)
+    const data = await fetchJsonFromSources<DockerStatsResponse>(API.dockerStats)
     if (data?.ret === 0 && data.stats) {
       const newStats = new Map<string, DockerStat>()
       data.stats.forEach(stat => {
@@ -513,41 +491,9 @@ export const useNavStore = defineStore('nav', () => {
     }
   }
 
-  // 加载 Lucky 服务统计
-  async function loadLuckyServicesStats() {
-    const data = await fetchJson<LuckyServicesStatsResponse>(API.luckyServicesStats)
-    if (data?.ret === 0 && data.stats) {
-      const newStats = new Map<string, LuckyServiceStat>()
-      data.stats.forEach(stat => {
-        newStats.set(stat.key, stat)
-      })
-      luckyServicesStats.value = newStats
-    }
-  }
-
-  // 开始 Lucky 服务统计轮询
-  function startLuckyServicesStatsPolling() {
-    stopLuckyServicesStatsPolling()
-    loadLuckyServicesStats()
-    luckyServicesStatsTimer.value = setInterval(loadLuckyServicesStats, 5000)
-  }
-
-  // 停止 Lucky 服务统计轮询
-  function stopLuckyServicesStatsPolling() {
-    if (luckyServicesStatsTimer.value) {
-      clearInterval(luckyServicesStatsTimer.value)
-      luckyServicesStatsTimer.value = null
-    }
-  }
-
   // 获取容器统计
   function getContainerStats(containerName: string): DockerStat | undefined {
     return dockerStats.value.get(containerName)
-  }
-
-  // 获取服务统计
-  function getServiceStats(key: string): LuckyServiceStat | undefined {
-    return luckyServicesStats.value.get(key)
   }
 
   return {
@@ -563,8 +509,6 @@ export const useNavStore = defineStore('nav', () => {
     hasLocalSitesOverride,
     dockerData,
     dockerStats,
-    luckyServicesData,
-    luckyServicesStats,
     serverConfig,
 
     // 计算属性
@@ -573,15 +517,12 @@ export const useNavStore = defineStore('nav', () => {
     allSites,
     dockerGroups,
     allContainers,
-    luckyServicesGroups,
-    allLuckyServices,
     panelTitle,
     panelSubtitle,
     panelLogo,
     panelFavicon,
     sitesEnabled,
     dockerEnabled,
-    luckyServicesEnabled,
 
     // 方法
     loadAllData,
@@ -591,16 +532,11 @@ export const useNavStore = defineStore('nav', () => {
     deleteSite,
     resetSitesOverride,
     loadDockerData,
-    loadLuckyServicesData,
     fetchNetworkType,
     fetchServerConfig,
     loadDockerStats,
     startDockerStatsPolling,
     stopDockerStatsPolling,
-    loadLuckyServicesStats,
-    startLuckyServicesStatsPolling,
-    stopLuckyServicesStatsPolling,
-    getContainerStats,
-    getServiceStats
+    getContainerStats
   }
 })

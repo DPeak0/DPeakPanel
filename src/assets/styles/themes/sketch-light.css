@@ -211,15 +211,13 @@
 }
 
 /* 移除标签页的彩色渐变和光晕 */
-[data-theme="sketch-light"] .content-tab.tab-docker.active,
-[data-theme="sketch-light"] .content-tab.tab-luckyServices.active {
+[data-theme="sketch-light"] .content-tab.tab-docker.active {
   background: hsl(210 10% 92%) !important;
   box-shadow: 2px 2px 0 rgba(100, 110, 120, 0.08) !important;
 }
 
 [data-theme="sketch-light"] .content-tab .tab-icon,
-[data-theme="sketch-light"] .content-tab.tab-docker .tab-icon,
-[data-theme="sketch-light"] .content-tab.tab-luckyServices .tab-icon {
+[data-theme="sketch-light"] .content-tab.tab-docker .tab-icon {
   color: hsl(var(--text-secondary)) !important;
   filter: var(--icon-filter);
 }

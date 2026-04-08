@@ -2,7 +2,7 @@
 import { computed, watch } from 'vue'
 import { useConfigStore } from '@/stores/config'
 import { useNavStore } from '@/stores/nav'
-import { Globe, Container, Server } from 'lucide-vue-next'
+import { Globe, Container } from 'lucide-vue-next'
 import type { TabType } from '@/types'
 
 const configStore = useConfigStore()
@@ -20,11 +20,6 @@ const availableTabs = computed(() => {
   // Docker 仅在有容器数据时显示
   if (navStore.dockerEnabled && navStore.allContainers.length > 0) {
     tabs.push({ key: 'docker', label: 'Docker', icon: Container })
-  }
-
-  // Lucky 服务仅在有服务数据时显示
-  if (navStore.luckyServicesEnabled && navStore.allLuckyServices.length > 0) {
-    tabs.push({ key: 'luckyServices', label: 'Lucky 服务', icon: Server })
   }
 
   return tabs
@@ -46,7 +41,6 @@ watch([currentTab, () => navStore.isLoading], async ([newTab, isLoading], [oldTa
 
   // 停止所有轮询
   navStore.stopDockerStatsPolling()
-  navStore.stopLuckyServicesStatsPolling()
 
   const shouldRefreshCurrentTab = wasLoading === true || oldTab !== newTab
 
@@ -60,11 +54,6 @@ watch([currentTab, () => navStore.isLoading], async ([newTab, isLoading], [oldTa
       await navStore.loadDockerData()
     }
     navStore.startDockerStatsPolling()
-  } else if (newTab === 'luckyServices' && navStore.luckyServicesEnabled) {
-    if (shouldRefreshCurrentTab || !navStore.luckyServicesData) {
-      await navStore.loadLuckyServicesData()
-    }
-    navStore.startLuckyServicesStatsPolling()
   }
 }, { immediate: true })
 </script>
@@ -163,20 +152,6 @@ watch([currentTab, () => navStore.isLoading], async ([newTab, isLoading], [oldTa
 }
 
 .content-tab.tab-docker.active .tab-icon {
-  color: #fff;
-}
-
-/* Lucky服务标签特殊样式 */
-.content-tab.tab-luckyServices .tab-icon {
-  color: #10b981;
-}
-
-.content-tab.tab-luckyServices.active {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
-}
-
-.content-tab.tab-luckyServices.active .tab-icon {
   color: #fff;
 }
 

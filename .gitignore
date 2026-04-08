@@ -3,3 +3,5 @@
 /node_modules/*
 /.qoder/*
 /.shared/*
+/runtime/backend/*.json
+/runtime/backend/.docker-network-cache.json

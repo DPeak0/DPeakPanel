@@ -31,15 +31,13 @@ export const PRESET_BACKGROUNDS: PresetBackground[] = [
 // 默认分组状态
 const DEFAULT_TAB_GROUPS: TabGroups = {
   sites: 'all',
-  docker: 'all',
-  luckyServices: 'all'
+  docker: 'all'
 }
 
 // 默认搜索关键字
 const DEFAULT_SEARCH_KEYWORDS: TabSearchKeywords = {
   sites: '',
-  docker: '',
-  luckyServices: ''
+  docker: ''
 }
 
 // 默认配置
@@ -49,7 +47,6 @@ const DEFAULT_CONFIG: UserConfig = {
   customBgUrl: '',
   layout: 'normal',
   dockerLayout: 'list',
-  luckyServicesLayout: 'normal',
   showDescription: true,
   showTime: true,
   showSearch: false,
@@ -127,7 +124,6 @@ export const useConfigStore = defineStore('config', () => {
   const theme = computed(() => config.value.theme)
   const layout = computed(() => config.value.layout)
   const dockerLayout = computed(() => config.value.dockerLayout)
-  const luckyServicesLayout = computed(() => config.value.luckyServicesLayout)
   const networkMode = computed(() => config.value.networkMode)
   const currentTab = computed(() => config.value.currentTab)
   
@@ -206,7 +202,7 @@ export const useConfigStore = defineStore('config', () => {
     
     // 应用配置模板中定义的字段
     const validKeys: (keyof UserConfig)[] = [
-      'theme', 'background', 'layout', 'dockerLayout', 'luckyServicesLayout',
+      'theme', 'background', 'layout', 'dockerLayout',
       'networkMode', 'currentTab', 'showDescription', 'showTime',
       'showSearch', 'showHeader', 'searchEngine', 'customSearchUrl'
     ]
@@ -311,11 +307,6 @@ export const useConfigStore = defineStore('config', () => {
   // 设置 Docker 布局
   function setDockerLayout(layout: LayoutMode) {
     updateConfig('dockerLayout', layout)
-  }
-
-  // 设置 Lucky 服务布局
-  function setLuckyServicesLayout(layout: LayoutMode) {
-    updateConfig('luckyServicesLayout', layout)
   }
 
   // 设置网络模式
@@ -457,7 +448,6 @@ export const useConfigStore = defineStore('config', () => {
     theme,
     layout,
     dockerLayout,
-    luckyServicesLayout,
     networkMode,
     currentTab,
     currentGroup,
@@ -479,7 +469,6 @@ export const useConfigStore = defineStore('config', () => {
     setTheme,
     setLayout,
     setDockerLayout,
-    setLuckyServicesLayout,
     setNetworkMode,
     setCurrentTab,
     setCurrentGroup,
