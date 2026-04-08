@@ -20,6 +20,7 @@ const siteEditorOpen = ref(false)
 const editorCreateMode = ref(false)
 const editingSiteKey = ref<string | null>(null)
 const dragPreviewEl = ref<HTMLElement | null>(null)
+const transparentDragImage = ref<HTMLCanvasElement | null>(null)
 const dragState = ref<{
   siteKey: string
   sourceGroupKey: string
@@ -27,6 +28,11 @@ const dragState = ref<{
   targetSiteKey: string | null
   position: 'before' | 'after' | 'end'
 } | null>(null)
+
+type PreviewSiteEntry = {
+  site: Site
+  previewGhost?: boolean
+}
 
 // 搜索关键字
 const searchKeyword = computed({
@@ -195,6 +201,16 @@ function createDragPreview(source: HTMLElement) {
   return preview
 }
 
+function getTransparentDragImage() {
+  if (!transparentDragImage.value) {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    transparentDragImage.value = canvas
+  }
+  return transparentDragImage.value
+}
+
 function handleDragStart(event: DragEvent, site: Site) {
   if (!editMode.value) return
 
@@ -213,8 +229,8 @@ function handleDragStart(event: DragEvent, site: Site) {
   }
 
   if (source && event.dataTransfer) {
-    const preview = createDragPreview(source)
-    event.dataTransfer.setDragImage(preview, Math.min(72, source.offsetWidth / 2), 24)
+    createDragPreview(source)
+    event.dataTransfer.setDragImage(getTransparentDragImage(), 0, 0)
   }
 }
 
@@ -257,10 +273,6 @@ function handleDrop() {
   dragState.value = null
 }
 
-function isDraggingSite(siteKey: string) {
-  return dragState.value?.siteKey === siteKey
-}
-
 function isDropTarget(groupKey: string, siteKey?: string) {
   if (!dragState.value) return false
   if (siteKey) {
@@ -269,12 +281,59 @@ function isDropTarget(groupKey: string, siteKey?: string) {
   return dragState.value.targetGroupKey === groupKey && !dragState.value.targetSiteKey
 }
 
-function getSqueezeClass(site: Site) {
-  if (!dragState.value?.targetSiteKey) return ''
-  if (site.key === dragState.value.siteKey || site.key === dragState.value.targetSiteKey) return ''
-  if ((site.groupKey || '') !== dragState.value.targetGroupKey) return ''
-  return dragState.value.position === 'before' ? 'squeeze-down' : 'squeeze-up'
+function buildPreviewEntries(sites: Site[], currentGroupKey?: string) {
+  const entries: PreviewSiteEntry[] = sites.map(site => ({ site }))
+
+  if (!editMode.value || !dragState.value?.targetGroupKey) {
+    return entries
+  }
+
+  const movingSite = navStore.allSites.find(site => site.key === dragState.value?.siteKey)
+  if (!movingSite) {
+    return entries
+  }
+
+  const visibleEntries = entries.filter(entry => entry.site.key !== movingSite.key)
+  const previewGroupKey = dragState.value.targetGroupKey
+
+  if (currentGroupKey && previewGroupKey !== currentGroupKey) {
+    return visibleEntries
+  }
+
+  let insertIndex = visibleEntries.length
+  if (dragState.value.targetSiteKey) {
+    const targetIndex = visibleEntries.findIndex(entry => entry.site.key === dragState.value?.targetSiteKey)
+    if (targetIndex >= 0) {
+      insertIndex = dragState.value.position === 'after' ? targetIndex + 1 : targetIndex
+    }
+  }
+
+  const previewSite: Site = {
+    ...movingSite,
+    groupKey: previewGroupKey
+  }
+
+  visibleEntries.splice(insertIndex, 0, {
+    site: previewSite,
+    previewGhost: true
+  })
+
+  return visibleEntries
 }
+
+const previewGroupedSites = computed(() => {
+  return groupedSites.value
+    .map(item => ({
+      group: item.group,
+      sites: buildPreviewEntries(item.sites, item.group.key)
+    }))
+    .filter(item => item.sites.length > 0)
+})
+
+const previewFilteredSites = computed(() => {
+  const selectedGroupKey = configStore.currentGroupArray[0]
+  return buildPreviewEntries(filteredSites.value, selectedGroupKey)
+})
 
 onBeforeUnmount(() => {
   cleanupDragPreview()
@@ -316,47 +375,45 @@ onBeforeUnmount(() => {
     <!-- 全部模式或多选分组模式：按分组显示 -->
     <template v-if="configStore.isAllSelected || configStore.currentGroupArray.length > 1">
       <div 
-        v-for="(item, index) in groupedSites" 
+        v-for="(item, index) in previewGroupedSites" 
         :key="item.group.key" 
         class="group-section"
-        :class="{ 'has-margin': index < groupedSites.length - 1 }"
+        :class="{ 'has-margin': index < previewGroupedSites.length - 1 }"
       >
         <!-- 分组标题 -->
         <h3 class="group-title">{{ item.group.name }}</h3>
         <!-- 站点网格 -->
-        <div
+        <TransitionGroup
+          name="site-reorder"
+          tag="div"
           :class="[gridClass, { 'group-drop-target': editMode && isDropTarget(item.group.key) }]"
           @dragover="handleGroupDragOver($event, item.group.key)"
           @drop.prevent="handleDrop"
         >
           <div
-            v-for="site in item.sites"
-            :key="site.key"
-            class="site-card-wrap animate-fade-in-up"
+            v-for="entry in item.sites"
+            :key="entry.previewGhost ? `${entry.site.key}__ghost` : entry.site.key"
+            class="site-card-wrap"
             :class="{
-              dragging: isDraggingSite(site.key),
-              'drop-before': editMode && isDropTarget(item.group.key, site.key) && dragState?.position === 'before',
-              'drop-after': editMode && isDropTarget(item.group.key, site.key) && dragState?.position === 'after',
-              'drop-active': editMode && isDropTarget(item.group.key, site.key),
-              [getSqueezeClass(site)]: !!getSqueezeClass(site),
+              'preview-ghost': entry.previewGhost,
               editable: editMode
             }"
-            :draggable="editMode"
-            @dragstart="handleDragStart($event, site)"
+            :draggable="editMode && !entry.previewGhost"
+            @dragstart="handleDragStart($event, entry.site)"
             @dragend="handleDragEnd"
-            @dragover="handleSiteDragOver($event, site)"
+            @dragover="handleSiteDragOver($event, entry.site)"
             @drop.prevent="handleDrop"
           >
             <SiteCard
-              :site="site"
+              :site="entry.site"
               :editable="editMode"
-              @edit="handleSiteCardEdit(site)"
+              @edit="handleSiteCardEdit(entry.site)"
             />
           </div>
-        </div>
+        </TransitionGroup>
       </div>
       <!-- 空状态 -->
-      <div v-if="groupedSites.length === 0" class="empty-state">
+      <div v-if="previewGroupedSites.length === 0" class="empty-state">
         <div class="empty-icon">
           <span>📂</span>
         </div>
@@ -367,36 +424,34 @@ onBeforeUnmount(() => {
     <!-- 单个分组模式（只选了一个分组） -->
     <template v-else>
       <!-- 站点网格 -->
-      <div
+      <TransitionGroup
+        name="site-reorder"
+        tag="div"
         :class="[gridClass, { 'group-drop-target': editMode && configStore.currentGroupArray.length === 1 && isDropTarget(configStore.currentGroupArray[0]) }]"
         @dragover="handleGroupDragOver($event, configStore.currentGroupArray[0])"
         @drop.prevent="handleDrop"
       >
         <div
-          v-for="site in filteredSites"
-          :key="site.key"
-          class="site-card-wrap animate-fade-in-up"
+          v-for="entry in previewFilteredSites"
+          :key="entry.previewGhost ? `${entry.site.key}__ghost` : entry.site.key"
+          class="site-card-wrap"
           :class="{
-            dragging: isDraggingSite(site.key),
-            'drop-before': editMode && isDropTarget(site.groupKey || '', site.key) && dragState?.position === 'before',
-            'drop-after': editMode && isDropTarget(site.groupKey || '', site.key) && dragState?.position === 'after',
-            'drop-active': editMode && isDropTarget(site.groupKey || '', site.key),
-            [getSqueezeClass(site)]: !!getSqueezeClass(site),
+            'preview-ghost': entry.previewGhost,
             editable: editMode
           }"
-          :draggable="editMode"
-          @dragstart="handleDragStart($event, site)"
+          :draggable="editMode && !entry.previewGhost"
+          @dragstart="handleDragStart($event, entry.site)"
           @dragend="handleDragEnd"
-          @dragover="handleSiteDragOver($event, site)"
+          @dragover="handleSiteDragOver($event, entry.site)"
           @drop.prevent="handleDrop"
         >
           <SiteCard
-            :site="site"
+            :site="entry.site"
             :editable="editMode"
-            @edit="handleSiteCardEdit(site)"
+            @edit="handleSiteCardEdit(entry.site)"
           />
         </div>
-      </div>
+      </TransitionGroup>
       <!-- 空状态 -->
       <div v-if="filteredSites.length === 0" class="empty-state">
         <div class="empty-icon">
@@ -493,64 +548,47 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
-.site-card-wrap.dragging {
-  opacity: 0.18;
-  transform: scale(0.965);
-  filter: saturate(0.72) blur(0.4px);
-}
-
-.site-card-wrap.dragging :deep(.cyber-card) {
-  box-shadow:
-    0 18px 46px rgb(0 0 0 / 0.24),
-    0 0 0 1px hsl(var(--neon-cyan) / 0.18);
-}
-
-.site-card-wrap.drop-active {
-  z-index: 2;
-}
-
-.site-card-wrap.drop-before,
-.site-card-wrap.drop-after {
-  transition-duration: 180ms;
-}
-
-.site-card-wrap.drop-before {
-  transform: translateY(12px) scale(0.985);
-}
-
-.site-card-wrap.drop-after {
-  transform: translateY(-12px) scale(0.985);
-}
-
-.site-card-wrap.squeeze-down {
-  transform: translateY(6px) scale(0.988);
-}
-
-.site-card-wrap.squeeze-up {
-  transform: translateY(-6px) scale(0.988);
-}
-
-.site-card-wrap.drop-before::before,
-.site-card-wrap.drop-after::after {
-  content: '';
-  position: absolute;
-  left: 0.4rem;
-  right: 0.4rem;
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, hsl(var(--neon-cyan)), hsl(var(--neon-blue)));
-  box-shadow:
-    0 0 0 3px hsl(var(--neon-cyan) / 0.1),
-    0 0 18px hsl(var(--neon-cyan) / 0.35);
+.site-card-wrap.preview-ghost {
   z-index: 3;
+  pointer-events: none;
+  transform: scale(1.015);
 }
 
-.site-card-wrap.drop-before::before {
-  top: -0.45rem;
+.site-card-wrap.preview-ghost :deep(.cyber-card) {
+  opacity: 0.72;
+  border-style: dashed;
+  border-color: hsl(var(--neon-cyan) / 0.38);
+  box-shadow:
+    0 18px 40px rgb(0 0 0 / 0.28),
+    0 0 0 1px hsl(var(--neon-cyan) / 0.2),
+    0 0 24px hsl(var(--neon-cyan) / 0.16);
+  background: linear-gradient(
+      135deg,
+      hsl(var(--neon-cyan) / 0.12),
+      hsl(var(--neon-blue) / 0.08)
+    ),
+    hsl(var(--site-card-bg));
 }
 
-.site-card-wrap.drop-after::after {
-  bottom: -0.45rem;
+.site-card-wrap.preview-ghost :deep(.card-edit-badge) {
+  opacity: 0.65;
+}
+
+.site-reorder-move {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.site-reorder-enter-active,
+.site-reorder-leave-active {
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease;
+}
+
+.site-reorder-enter-from,
+.site-reorder-leave-to {
+  opacity: 0.35;
+  transform: scale(0.96);
 }
 
 .group-drop-target {
@@ -570,8 +608,8 @@ onBeforeUnmount(() => {
 }
 
 .drag-preview-ghost {
-  opacity: 0.98;
-  transform: rotate(3deg) scale(1.03);
+  opacity: 1;
+  transform: rotate(2.8deg) scale(1.02);
   filter: drop-shadow(0 18px 36px rgb(0 0 0 / 0.32));
 }
 
