@@ -5,3 +5,4 @@
 /.shared/*
 /runtime/backend/*.json
 /runtime/backend/.docker-network-cache.json
+/docker-sync/__pycache__/
