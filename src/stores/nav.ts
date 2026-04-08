@@ -78,6 +78,49 @@ function normalizeUrlList(urls: string[] | undefined) {
     .filter(Boolean)
 }
 
+function sortSitesInGroup(sites: Site[], groupKey?: string) {
+  return sites
+    .filter(site => (site.groupKey || '') === (groupKey || ''))
+    .sort((a, b) => {
+      const orderDiff = (a.order || 0) - (b.order || 0)
+      if (orderDiff !== 0) return orderDiff
+      return a.name.localeCompare(b.name)
+    })
+}
+
+function normalizeSiteOrders(groups: Group[], sites: Site[]) {
+  const normalized: Site[] = []
+  const handledKeys = new Set<string>()
+  const orderedGroups = [...groups].sort((a, b) => (a.order || 0) - (b.order || 0))
+
+  orderedGroups.forEach(group => {
+    sortSitesInGroup(sites, group.key).forEach((site, index) => {
+      normalized.push({
+        ...site,
+        order: index
+      })
+      handledKeys.add(site.key)
+    })
+  })
+
+  const remainingSites = sites
+    .filter(site => !handledKeys.has(site.key))
+    .sort((a, b) => {
+      const orderDiff = (a.order || 0) - (b.order || 0)
+      if (orderDiff !== 0) return orderDiff
+      return a.name.localeCompare(b.name)
+    })
+
+  remainingSites.forEach((site, index) => {
+    normalized.push({
+      ...site,
+      order: index
+    })
+  })
+
+  return normalized
+}
+
 export const useNavStore = defineStore('nav', () => {
   // 加载状态
   const isLoading = ref(true)
@@ -247,7 +290,7 @@ export const useNavStore = defineStore('nav', () => {
       groups.map(group => ({ ...group })),
       sites
     )
-    const nextSites = sites.map(site => ({
+    const nextSites = normalizeSiteOrders(nextGroups, sites).map(site => ({
       ...site,
       frontendUrls: normalizeUrlList(site.frontendUrls),
       backendUrls: normalizeUrlList(site.backendUrls)
@@ -335,8 +378,16 @@ export const useNavStore = defineStore('nav', () => {
       groups.push(targetGroup)
     }
 
-    const preferredSiteKey = slugify(input.key?.trim() || name, 'site')
+    const manualKey = input.key?.trim()
+    const preferredSiteKey = editingIndex >= 0 && !manualKey
+      ? (input.originalKey || slugify(name, 'site'))
+      : slugify(manualKey || name, 'site')
     const siteKey = ensureUniqueKey(preferredSiteKey, usedSiteKeys, input.originalKey)
+    const currentSite = editingIndex >= 0 ? sites[editingIndex] : null
+    const nextGroupSites = sortSitesInGroup(
+      sites.filter(site => site.key !== currentSite?.key),
+      targetGroup.key
+    )
 
     const nextSite: Site = {
       key: siteKey,
@@ -346,7 +397,11 @@ export const useNavStore = defineStore('nav', () => {
       frontendUrls,
       backendUrls,
       groupKey: targetGroup.key,
-      order: Number.isFinite(input.order) ? Number(input.order) : sites.length + 1,
+      order: Number.isFinite(input.order)
+        ? Number(input.order)
+        : currentSite?.groupKey === targetGroup.key
+          ? currentSite.order || 0
+          : nextGroupSites.length,
       enable: input.enable !== false,
       target: input.target === '_self' ? '_self' : '_blank'
     }
@@ -367,6 +422,55 @@ export const useNavStore = defineStore('nav', () => {
     const sites = (sitesData.value.sites || []).filter(site => site.key !== siteKey)
     const groups = [...(sitesData.value.groups || [])]
     replaceEditableSitesData(groups, sites)
+  }
+
+  function moveSite(siteKey: string, targetGroupKey: string, targetSiteKey?: string, position: 'before' | 'after' | 'end' = 'end') {
+    if (!sitesData.value) return
+
+    const groups = [...(sitesData.value.groups || [])].map(group => ({ ...group }))
+    const sites = [...(sitesData.value.sites || [])].map(site => ({
+      ...site,
+      frontendUrls: [...(site.frontendUrls || [])],
+      backendUrls: [...(site.backendUrls || [])]
+    }))
+
+    const movingIndex = sites.findIndex(site => site.key === siteKey)
+    if (movingIndex < 0) return
+
+    const movingSite = sites[movingIndex]
+    const sourceGroupKey = movingSite.groupKey || ''
+    const remainingSites = sites.filter(site => site.key !== siteKey)
+
+    const targetSites = sortSitesInGroup(remainingSites, targetGroupKey)
+    let insertIndex = targetSites.length
+
+    if (targetSiteKey) {
+      const targetIndex = targetSites.findIndex(site => site.key === targetSiteKey)
+      if (targetIndex >= 0) {
+        insertIndex = position === 'after' ? targetIndex + 1 : targetIndex
+      }
+    }
+
+    const nextTargetSites = [...targetSites]
+    nextTargetSites.splice(insertIndex, 0, {
+      ...movingSite,
+      groupKey: targetGroupKey
+    })
+
+    const unaffectedSites = remainingSites.filter(site => {
+      const groupKey = site.groupKey || ''
+      return groupKey !== sourceGroupKey && groupKey !== targetGroupKey
+    })
+
+    const nextSourceSites = sourceGroupKey && sourceGroupKey !== targetGroupKey
+      ? sortSitesInGroup(remainingSites, sourceGroupKey)
+      : []
+
+    replaceEditableSitesData(groups, [
+      ...unaffectedSites,
+      ...nextSourceSites,
+      ...nextTargetSites
+    ])
   }
 
   function resetSitesOverride() {
@@ -530,6 +634,7 @@ export const useNavStore = defineStore('nav', () => {
     loadSitesData,
     saveSite,
     deleteSite,
+    moveSite,
     resetSitesOverride,
     loadDockerData,
     fetchNetworkType,

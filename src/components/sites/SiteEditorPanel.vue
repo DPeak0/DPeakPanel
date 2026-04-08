@@ -31,15 +31,25 @@ const form = reactive({
   name: '',
   description: '',
   iconUrl: '',
-  groupName: '',
+  groupSelection: '',
+  customGroupName: '',
   frontendUrlsText: '',
   backendUrlsText: '',
-  order: 0,
   enable: true,
   target: '_blank'
 })
 
-const groupOptions = computed(() => navStore.siteGroups.map(group => group.name))
+const CUSTOM_GROUP_VALUE = '__custom__'
+
+const groupOptions = computed(() => {
+  return Array.from(new Set(navStore.siteGroups.map(group => group.name).filter(Boolean)))
+})
+
+const resolvedGroupName = computed(() => {
+  return form.groupSelection === CUSTOM_GROUP_VALUE
+    ? form.customGroupName.trim()
+    : form.groupSelection.trim()
+})
 const currentSite = computed(() => {
   return props.siteKey
     ? navStore.editableSites.find(site => site.key === props.siteKey) || null
@@ -49,12 +59,8 @@ const currentSite = computed(() => {
 const panelTitle = computed(() => props.createMode ? '新增站点' : `编辑站点${currentSite.value ? ` · ${currentSite.value.name}` : ''}`)
 const panelSubtitle = computed(() => props.createMode
   ? '填写站点信息后保存，即可立即出现在当前页面。'
-  : '修改当前站点卡片的信息，保存后会立即刷新展示。'
+  : '修改当前站点信息，保存后会立即刷新展示。'
 )
-
-function getNextOrder() {
-  return navStore.editableSites.reduce((max, site) => Math.max(max, site.order || 0), 0) + 1
-}
 
 function resetForm() {
   Object.assign(form, {
@@ -63,10 +69,10 @@ function resetForm() {
     name: '',
     description: '',
     iconUrl: '',
-    groupName: groupOptions.value[0] || '',
+    groupSelection: groupOptions.value[0] || CUSTOM_GROUP_VALUE,
+    customGroupName: '',
     frontendUrlsText: '',
     backendUrlsText: '',
-    order: getNextOrder(),
     enable: true,
     target: '_blank'
   })
@@ -81,6 +87,7 @@ function fillForm(site: Site | null) {
   }
 
   const groupName = navStore.siteGroups.find(group => group.key === site.groupKey)?.name || ''
+  const matchesExistingGroup = groupOptions.value.includes(groupName)
   errorMessage.value = ''
   Object.assign(form, {
     originalKey: site.key,
@@ -88,10 +95,10 @@ function fillForm(site: Site | null) {
     name: site.name,
     description: site.description || '',
     iconUrl: site.iconUrl || '',
-    groupName,
+    groupSelection: matchesExistingGroup ? groupName : CUSTOM_GROUP_VALUE,
+    customGroupName: matchesExistingGroup ? '' : groupName,
     frontendUrlsText: (site.frontendUrls || []).join('\n'),
     backendUrlsText: (site.backendUrls || []).join('\n'),
-    order: site.order || 0,
     enable: site.enable !== false,
     target: site.target === '_self' ? '_self' : '_blank'
   })
@@ -146,10 +153,9 @@ async function handleSave() {
       name: form.name,
       description: form.description,
       iconUrl: form.iconUrl,
-      groupName: form.groupName,
+      groupName: resolvedGroupName.value,
       frontendUrls: parseUrls(form.frontendUrlsText),
       backendUrls: parseUrls(form.backendUrlsText),
-      order: Number(form.order),
       enable: form.enable,
       target: form.target
     })
@@ -231,38 +237,32 @@ watch(
 
       <div class="editor-form">
         <div class="form-grid">
-          <label class="field">
+          <label class="field field-full">
             <span class="field-label">站点名称</span>
             <input v-model.trim="form.name" class="field-input" type="text" placeholder="例如：GitHub" />
           </label>
 
           <label class="field">
-            <span class="field-label">站点 Key</span>
-            <input v-model.trim="form.key" class="field-input" type="text" placeholder="留空时根据名称自动生成" />
-          </label>
-
-          <label class="field">
-            <span class="field-label">分组名称</span>
-            <input
-              v-model.trim="form.groupName"
-              class="field-input"
-              type="text"
-              list="site-group-options"
-              placeholder="例如：开发工具"
-            />
-            <datalist id="site-group-options">
-              <option v-for="group in groupOptions" :key="group" :value="group" />
-            </datalist>
-          </label>
-
-          <label class="field">
-            <span class="field-label">排序</span>
-            <input v-model.number="form.order" class="field-input" type="number" min="0" />
+            <span class="field-label">分组</span>
+            <select v-model="form.groupSelection" class="field-input">
+              <option v-for="group in groupOptions" :key="group" :value="group">{{ group }}</option>
+              <option :value="CUSTOM_GROUP_VALUE">新建分组</option>
+            </select>
           </label>
 
           <label class="field field-full">
             <span class="field-label">描述</span>
             <input v-model.trim="form.description" class="field-input" type="text" placeholder="站点说明，可选" />
+          </label>
+
+          <label v-if="form.groupSelection === CUSTOM_GROUP_VALUE" class="field field-full">
+            <span class="field-label">新分组名称</span>
+            <input
+              v-model.trim="form.customGroupName"
+              class="field-input"
+              type="text"
+              placeholder="例如：开发工具"
+            />
           </label>
 
           <label class="field field-full">
@@ -299,9 +299,10 @@ watch(
             <textarea
               v-model="form.frontendUrlsText"
               class="field-textarea"
-              rows="4"
+              rows="3"
               placeholder="每行一个链接，例如：https://github.com"
             />
+            <p class="helper-text">支持输入多条链接，按回车换行，可拖动右下角调整输入框高度。</p>
           </label>
 
           <label class="field field-full">
@@ -309,9 +310,10 @@ watch(
             <textarea
               v-model="form.backendUrlsText"
               class="field-textarea"
-              rows="4"
+              rows="3"
               placeholder="每行一个链接，例如：http://192.168.1.10:3000"
             />
+            <p class="helper-text">支持输入多条链接，按回车换行，可拖动右下角调整输入框高度。</p>
           </label>
 
           <label class="field">
@@ -366,8 +368,8 @@ watch(
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 91;
-  width: min(860px, calc(100vw - 2rem));
-  max-height: min(88vh, 860px);
+  width: min(680px, calc(100vw - 1.5rem));
+  max-height: min(84vh, 760px);
   display: flex;
   flex-direction: column;
   border-radius: 24px;
@@ -383,7 +385,7 @@ watch(
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  padding: 1.25rem 1.5rem 1rem;
+  padding: 1rem 1.2rem 0.85rem;
   border-bottom: 1px solid hsl(var(--glass-border));
 }
 
@@ -397,28 +399,24 @@ watch(
 .editor-subtitle {
   margin: 0.35rem 0 0;
   color: hsl(var(--text-secondary));
-  font-size: 0.95rem;
+  font-size: 0.88rem;
 }
 
 .editor-form {
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 1rem 1.2rem 1.2rem;
   overflow-y: auto;
 }
 
 .form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-}
-
-.field-full {
-  grid-column: 1 / -1;
 }
 
 .field-label {
@@ -516,11 +514,14 @@ watch(
 
 .field-textarea {
   resize: vertical;
-  min-height: 104px;
+  min-height: 88px;
+  max-height: 260px;
 }
 
 .toggle-field {
-  justify-content: flex-end;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .toggle-input {
@@ -536,7 +537,9 @@ watch(
 .form-actions {
   display: flex;
   gap: 0.75rem;
-  margin-top: 1.25rem;
+  margin-top: 1rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .action-btn,
@@ -613,10 +616,6 @@ watch(
 @media (max-width: 720px) {
   .editor-panel {
     width: calc(100vw - 1rem);
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr;
   }
 
   .icon-actions {

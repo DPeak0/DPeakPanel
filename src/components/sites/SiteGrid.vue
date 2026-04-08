@@ -9,7 +9,7 @@ import SearchBox from '@/components/common/SearchBox.vue'
 import GroupDropdown from '@/components/common/GroupDropdown.vue'
 import NetworkModeDropdown from '@/components/common/NetworkModeDropdown.vue'
 import LayoutSwitcher from '@/components/common/LayoutSwitcher.vue'
-import { Pencil, CircleAlert, Plus, Check, RotateCcw } from 'lucide-vue-next'
+import { Pencil, Plus, Check } from 'lucide-vue-next'
 import type { Site, Group } from '@/types'
 
 const navStore = useNavStore()
@@ -19,6 +19,13 @@ const editMode = ref(false)
 const siteEditorOpen = ref(false)
 const editorCreateMode = ref(false)
 const editingSiteKey = ref<string | null>(null)
+const dragState = ref<{
+  siteKey: string
+  sourceGroupKey: string
+  targetGroupKey: string | null
+  targetSiteKey: string | null
+  position: 'before' | 'after' | 'end'
+} | null>(null)
 
 // 搜索关键字
 const searchKeyword = computed({
@@ -164,11 +171,66 @@ function handleSiteCardEdit(site: Site) {
   openSiteEditor(site.key)
 }
 
-function resetLocalSites() {
-  const confirmed = window.confirm('确认恢复为服务器原始站点数据吗？本地编辑内容将被清空。')
-  if (!confirmed) return
-  navStore.resetSitesOverride()
-  closeSiteEditor()
+function handleDragStart(site: Site) {
+  if (!editMode.value) return
+
+  dragState.value = {
+    siteKey: site.key,
+    sourceGroupKey: site.groupKey || '',
+    targetGroupKey: site.groupKey || '',
+    targetSiteKey: null,
+    position: 'end'
+  }
+}
+
+function handleDragEnd() {
+  dragState.value = null
+}
+
+function handleGroupDragOver(event: DragEvent, groupKey: string) {
+  if (!dragState.value) return
+  event.preventDefault()
+  dragState.value.targetGroupKey = groupKey
+  dragState.value.targetSiteKey = null
+  dragState.value.position = 'end'
+}
+
+function handleSiteDragOver(event: DragEvent, site: Site) {
+  if (!dragState.value) return
+  if (dragState.value.siteKey === site.key) return
+  event.preventDefault()
+
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const before = event.clientY < rect.top + rect.height / 2
+
+  dragState.value.targetGroupKey = site.groupKey || ''
+  dragState.value.targetSiteKey = site.key
+  dragState.value.position = before ? 'before' : 'after'
+}
+
+function handleDrop() {
+  if (!dragState.value || !dragState.value.targetGroupKey) return
+
+  navStore.moveSite(
+    dragState.value.siteKey,
+    dragState.value.targetGroupKey,
+    dragState.value.targetSiteKey || undefined,
+    dragState.value.position
+  )
+
+  dragState.value = null
+}
+
+function isDraggingSite(siteKey: string) {
+  return dragState.value?.siteKey === siteKey
+}
+
+function isDropTarget(groupKey: string, siteKey?: string) {
+  if (!dragState.value) return false
+  if (siteKey) {
+    return dragState.value.targetGroupKey === groupKey && dragState.value.targetSiteKey === siteKey
+  }
+  return dragState.value.targetGroupKey === groupKey && !dragState.value.targetSiteKey
 }
 
 </script>
@@ -192,18 +254,6 @@ function resetLocalSites() {
           <Plus class="toolbar-icon" />
           新增站点
         </button>
-        <button
-          v-if="editMode && navStore.hasLocalSitesOverride"
-          class="site-editor-btn secondary warning"
-          @click="resetLocalSites"
-        >
-          <RotateCcw class="toolbar-icon" />
-          恢复数据
-        </button>
-        <div v-else-if="navStore.hasLocalSitesOverride" class="override-badge">
-          <CircleAlert class="toolbar-icon" />
-          已本地修改
-        </div>
         <GroupDropdown
           :groups="groups"
           :current="configStore.currentGroup"
@@ -227,15 +277,33 @@ function resetLocalSites() {
         <!-- 分组标题 -->
         <h3 class="group-title">{{ item.group.name }}</h3>
         <!-- 站点网格 -->
-        <div :class="gridClass">
-          <SiteCard
+        <div
+          :class="[gridClass, { 'group-drop-target': editMode && isDropTarget(item.group.key) }]"
+          @dragover="handleGroupDragOver($event, item.group.key)"
+          @drop.prevent="handleDrop"
+        >
+          <div
             v-for="site in item.sites"
             :key="site.key"
-            :site="site"
-            :editable="editMode"
-            class="animate-fade-in-up"
-            @edit="handleSiteCardEdit(site)"
-          />
+            class="site-card-wrap animate-fade-in-up"
+            :class="{
+              dragging: isDraggingSite(site.key),
+              'drop-before': editMode && isDropTarget(item.group.key, site.key) && dragState?.position === 'before',
+              'drop-after': editMode && isDropTarget(item.group.key, site.key) && dragState?.position === 'after',
+              editable: editMode
+            }"
+            :draggable="editMode"
+            @dragstart="handleDragStart(site)"
+            @dragend="handleDragEnd"
+            @dragover="handleSiteDragOver($event, site)"
+            @drop.prevent="handleDrop"
+          >
+            <SiteCard
+              :site="site"
+              :editable="editMode"
+              @edit="handleSiteCardEdit(site)"
+            />
+          </div>
         </div>
       </div>
       <!-- 空状态 -->
@@ -250,15 +318,33 @@ function resetLocalSites() {
     <!-- 单个分组模式（只选了一个分组） -->
     <template v-else>
       <!-- 站点网格 -->
-      <div :class="gridClass">
-        <SiteCard
+      <div
+        :class="[gridClass, { 'group-drop-target': editMode && configStore.currentGroupArray.length === 1 && isDropTarget(configStore.currentGroupArray[0]) }]"
+        @dragover="handleGroupDragOver($event, configStore.currentGroupArray[0])"
+        @drop.prevent="handleDrop"
+      >
+        <div
           v-for="site in filteredSites"
           :key="site.key"
-          :site="site"
-          :editable="editMode"
-          class="animate-fade-in-up"
-          @edit="handleSiteCardEdit(site)"
-        />
+          class="site-card-wrap animate-fade-in-up"
+          :class="{
+            dragging: isDraggingSite(site.key),
+            'drop-before': editMode && isDropTarget(site.groupKey || '', site.key) && dragState?.position === 'before',
+            'drop-after': editMode && isDropTarget(site.groupKey || '', site.key) && dragState?.position === 'after',
+            editable: editMode
+          }"
+          :draggable="editMode"
+          @dragstart="handleDragStart(site)"
+          @dragend="handleDragEnd"
+          @dragover="handleSiteDragOver($event, site)"
+          @drop.prevent="handleDrop"
+        >
+          <SiteCard
+            :site="site"
+            :editable="editMode"
+            @edit="handleSiteCardEdit(site)"
+          />
+        </div>
       </div>
       <!-- 空状态 -->
       <div v-if="filteredSites.length === 0" class="empty-state">
@@ -301,8 +387,7 @@ function resetLocalSites() {
   flex-shrink: 0;
 }
 
-.site-editor-btn,
-.override-badge {
+.site-editor-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -328,23 +413,67 @@ function resetLocalSites() {
   background: transparent;
 }
 
-.site-editor-btn.warning {
-  color: hsl(var(--warning));
-}
-
 .site-editor-btn:hover {
   transform: translateY(-1px);
   border-color: hsl(var(--neon-cyan) / 0.35);
   box-shadow: 0 0 0 3px hsl(var(--neon-cyan) / 0.08);
 }
 
-.override-badge {
-  color: hsl(var(--warning));
-}
-
 .toolbar-icon {
   width: 0.95rem;
   height: 0.95rem;
+}
+
+.site-card-wrap {
+  position: relative;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.site-card-wrap.editable {
+  cursor: grab;
+}
+
+.site-card-wrap.editable:active {
+  cursor: grabbing;
+}
+
+.site-card-wrap.dragging {
+  opacity: 0.45;
+}
+
+.site-card-wrap.drop-before::before,
+.site-card-wrap.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(var(--neon-cyan)), hsl(var(--neon-blue)));
+  box-shadow: 0 0 0 3px hsl(var(--neon-cyan) / 0.1);
+  z-index: 3;
+}
+
+.site-card-wrap.drop-before::before {
+  top: -0.45rem;
+}
+
+.site-card-wrap.drop-after::after {
+  bottom: -0.45rem;
+}
+
+.group-drop-target {
+  position: relative;
+}
+
+.group-drop-target::after {
+  content: '';
+  position: absolute;
+  inset: -0.35rem;
+  border-radius: 20px;
+  border: 1px dashed hsl(var(--neon-cyan) / 0.45);
+  background: hsl(var(--neon-cyan) / 0.04);
+  pointer-events: none;
 }
 
 @media (max-width: 480px) {
