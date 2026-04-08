@@ -27,6 +27,7 @@ const dragState = ref<{
   targetGroupKey: string | null
   targetSiteKey: string | null
   position: 'before' | 'after' | 'end'
+  previewEnabled: boolean
 } | null>(null)
 
 type PreviewSiteEntry = {
@@ -219,7 +220,8 @@ function handleDragStart(event: DragEvent, site: Site) {
     sourceGroupKey: site.groupKey || '',
     targetGroupKey: site.groupKey || '',
     targetSiteKey: null,
-    position: 'end'
+    position: 'end',
+    previewEnabled: false
   }
 
   const source = event.currentTarget as HTMLElement | null
@@ -242,6 +244,7 @@ function handleDragEnd() {
 function handleGroupDragOver(event: DragEvent, groupKey: string) {
   if (!dragState.value) return
   event.preventDefault()
+  dragState.value.previewEnabled = true
   dragState.value.targetGroupKey = groupKey
   dragState.value.targetSiteKey = null
   dragState.value.position = 'end'
@@ -251,6 +254,7 @@ function handleSiteDragOver(event: DragEvent, site: Site) {
   if (!dragState.value) return
   if (dragState.value.siteKey === site.key) return
   event.preventDefault()
+  dragState.value.previewEnabled = true
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const before = event.clientY < rect.top + rect.height / 2
@@ -284,7 +288,7 @@ function isDropTarget(groupKey: string, siteKey?: string) {
 function buildPreviewEntries(sites: Site[], currentGroupKey?: string) {
   const entries: PreviewSiteEntry[] = sites.map(site => ({ site }))
 
-  if (!editMode.value || !dragState.value?.targetGroupKey) {
+  if (!editMode.value || !dragState.value?.targetGroupKey || !dragState.value.previewEnabled) {
     return entries
   }
 
