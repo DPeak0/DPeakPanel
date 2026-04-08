@@ -18,7 +18,7 @@ docker pull ghcr.io/dpeak0/dpeakpanel:latest
 docker run -d \
   --name dpeakpanel \
   --restart unless-stopped \
-  -p 5173:80 \
+  -p 5173:5173 \
   ghcr.io/dpeak0/dpeakpanel:latest
 ```
 
