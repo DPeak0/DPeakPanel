@@ -18,14 +18,14 @@ docker pull ghcr.io/dpeak0/dpeakpanel:latest
 docker run -d \
   --name dpeakpanel \
   --restart unless-stopped \
-  -p 18080:80 \
+  -p 5173:80 \
   ghcr.io/dpeak0/dpeakpanel:latest
 ```
 
 访问地址：
 
 ```text
-http://服务器IP:18080
+http://服务器IP:5173
 ```
 
 ### 方式二：在本地构建并运行
@@ -39,7 +39,7 @@ docker compose up -d --build
 默认同样监听：
 
 ```text
-http://服务器IP:18080
+http://服务器IP:5173
 ```
 
 ## 常用命令
