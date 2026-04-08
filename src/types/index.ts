@@ -54,6 +54,21 @@ export interface Site {
   target?: string
 }
 
+/** 站点编辑表单 */
+export interface SiteEditorInput {
+  originalKey?: string
+  key?: string
+  name: string
+  description?: string
+  iconUrl?: string
+  frontendUrls?: string[]
+  backendUrls?: string[]
+  groupName?: string
+  order?: number
+  enable?: boolean
+  target?: string
+}
+
 // ============ Docker 类型 ============
 
 /** Docker 数据响应 */

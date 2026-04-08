@@ -14,7 +14,8 @@ import type {
   DockerContainer,
   LuckyService,
   Group,
-  NetworkType
+  NetworkType,
+  SiteEditorInput
 } from '@/types'
 
 // API 路径
@@ -29,6 +30,60 @@ const API = {
   config: './backend/default-config.json'
 }
 
+const SITES_OVERRIDE_STORAGE_KEY = 'lightpanel_sites_override'
+
+function cloneSitesData(data: SitesData): SitesData {
+  return {
+    networkType: data.networkType,
+    clientIP: data.clientIP,
+    groups: (data.groups || []).map(group => ({ ...group })),
+    sites: (data.sites || []).map(site => ({
+      ...site,
+      frontendUrls: [...(site.frontendUrls || [])],
+      backendUrls: [...(site.backendUrls || [])]
+    }))
+  }
+}
+
+function slugify(value: string, fallback: string) {
+  const normalized = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s-_]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return normalized || fallback
+}
+
+function ensureUniqueKey(preferredKey: string, usedKeys: Set<string>, currentKey?: string) {
+  if (currentKey && preferredKey === currentKey) {
+    return currentKey
+  }
+
+  if (!usedKeys.has(preferredKey)) {
+    return preferredKey
+  }
+
+  let index = 2
+  let candidate = `${preferredKey}-${index}`
+  while (usedKeys.has(candidate)) {
+    index += 1
+    candidate = `${preferredKey}-${index}`
+  }
+
+  return candidate
+}
+
+function normalizeUrlList(urls: string[] | undefined) {
+  return (urls || [])
+    .map(url => url.trim())
+    .filter(Boolean)
+}
+
 export const useNavStore = defineStore('nav', () => {
   // 加载状态
   const isLoading = ref(true)
@@ -38,10 +93,12 @@ export const useNavStore = defineStore('nav', () => {
   const navConfig = ref<NavConfig | null>(null)
 
   // 站点数据
+  const serverSitesData = ref<SitesData | null>(null)
   const sitesData = ref<SitesData | null>(null)
   const networkType = ref<NetworkType>('external')
   const networkTypeFetchFailed = ref(false)  // 网络类型查询是否失败
   const clientIP = ref('')
+  const hasLocalSitesOverride = ref(false)
 
   // Docker 数据
   const dockerData = ref<DockerData | null>(null)
@@ -59,6 +116,15 @@ export const useNavStore = defineStore('nav', () => {
   // 计算属性：站点分组
   const siteGroups = computed<Group[]>(() => {
     return sitesData.value?.groups || []
+  })
+
+  const editableSites = computed<Site[]>(() => {
+    const sites = sitesData.value?.sites || []
+    return [...sites].sort((a, b) => {
+      const orderDiff = (a.order || 0) - (b.order || 0)
+      if (orderDiff !== 0) return orderDiff
+      return a.name.localeCompare(b.name)
+    })
   })
 
   // 计算属性：所有站点
@@ -125,6 +191,89 @@ export const useNavStore = defineStore('nav', () => {
     }
   }
 
+  function readSitesOverride(): Pick<SitesData, 'groups' | 'sites'> | null {
+    try {
+      const raw = localStorage.getItem(SITES_OVERRIDE_STORAGE_KEY)
+      if (!raw) {
+        hasLocalSitesOverride.value = false
+        return null
+      }
+
+      const parsed = JSON.parse(raw)
+      if (!parsed || !Array.isArray(parsed.groups) || !Array.isArray(parsed.sites)) {
+        localStorage.removeItem(SITES_OVERRIDE_STORAGE_KEY)
+        hasLocalSitesOverride.value = false
+        return null
+      }
+
+      hasLocalSitesOverride.value = true
+      return {
+        groups: parsed.groups,
+        sites: parsed.sites
+      }
+    } catch {
+      localStorage.removeItem(SITES_OVERRIDE_STORAGE_KEY)
+      hasLocalSitesOverride.value = false
+      return null
+    }
+  }
+
+  function applySitesOverride(baseData: SitesData): SitesData {
+    const override = readSitesOverride()
+    if (!override) {
+      return cloneSitesData(baseData)
+    }
+
+    return {
+      networkType: baseData.networkType,
+      clientIP: baseData.clientIP,
+      groups: (override.groups || []).map(group => ({ ...group })),
+      sites: (override.sites || []).map(site => ({
+        ...site,
+        frontendUrls: [...(site.frontendUrls || [])],
+        backendUrls: [...(site.backendUrls || [])]
+      }))
+    }
+  }
+
+  function persistSitesOverride(groups: Group[], sites: Site[]) {
+    localStorage.setItem(
+      SITES_OVERRIDE_STORAGE_KEY,
+      JSON.stringify({
+        groups,
+        sites
+      })
+    )
+    hasLocalSitesOverride.value = true
+  }
+
+  function pruneEmptyGroups(groups: Group[], sites: Site[]) {
+    const usedGroupKeys = new Set(sites.map(site => site.groupKey).filter(Boolean))
+    return groups.filter(group => usedGroupKeys.has(group.key))
+  }
+
+  function replaceEditableSitesData(groups: Group[], sites: Site[]) {
+    if (!sitesData.value) return
+
+    const nextGroups = pruneEmptyGroups(
+      groups.map(group => ({ ...group })),
+      sites
+    )
+    const nextSites = sites.map(site => ({
+      ...site,
+      frontendUrls: normalizeUrlList(site.frontendUrls),
+      backendUrls: normalizeUrlList(site.backendUrls)
+    }))
+
+    sitesData.value = {
+      ...sitesData.value,
+      groups: nextGroups,
+      sites: nextSites
+    }
+
+    persistSitesOverride(nextGroups, nextSites)
+  }
+
   // 加载基础配置（nav.json）
   async function loadNavConfig() {
     const config = await fetchJson<NavConfig>(API.nav)
@@ -142,11 +291,106 @@ export const useNavStore = defineStore('nav', () => {
   async function loadSitesData() {
     const data = await fetchJson<SitesData>(API.sites)
     if (data) {
-      sitesData.value = data
-      networkType.value = data.networkType || 'external'
-      clientIP.value = data.clientIP || ''
+      serverSitesData.value = cloneSitesData(data)
+      const resolvedData = applySitesOverride(data)
+      sitesData.value = resolvedData
+      networkType.value = resolvedData.networkType || 'external'
+      clientIP.value = resolvedData.clientIP || ''
     }
     return data
+  }
+
+  function saveSite(input: SiteEditorInput) {
+    if (!sitesData.value) return
+
+    const name = input.name.trim()
+    if (!name) {
+      throw new Error('站点名称不能为空')
+    }
+
+    const frontendUrls = normalizeUrlList(input.frontendUrls)
+    const backendUrls = normalizeUrlList(input.backendUrls)
+
+    if (frontendUrls.length === 0 && backendUrls.length === 0) {
+      throw new Error('请至少填写一个内网或外网链接')
+    }
+
+    const groups = [...(sitesData.value.groups || [])].map(group => ({ ...group }))
+    const sites: Site[] = [...(sitesData.value.sites || [])].map(site => ({
+      ...site,
+      frontendUrls: [...(site.frontendUrls || [])],
+      backendUrls: [...(site.backendUrls || [])]
+    }))
+
+    const editingIndex = input.originalKey
+      ? sites.findIndex(site => site.key === input.originalKey)
+      : -1
+
+    const usedSiteKeys = new Set(
+      sites
+        .filter((_, index) => index !== editingIndex)
+        .map(site => site.key)
+    )
+
+    const groupName = (input.groupName || '').trim() || '未分组'
+    let targetGroup = groups.find(group => group.name === groupName)
+
+    if (!targetGroup) {
+      const usedGroupKeys = new Set(groups.map(group => group.key))
+      const groupKey = ensureUniqueKey(slugify(groupName, 'group'), usedGroupKeys)
+      targetGroup = {
+        key: groupKey,
+        name: groupName,
+        icon: '',
+        order: groups.length + 1
+      }
+      groups.push(targetGroup)
+    }
+
+    const preferredSiteKey = slugify(input.key?.trim() || name, 'site')
+    const siteKey = ensureUniqueKey(preferredSiteKey, usedSiteKeys, input.originalKey)
+
+    const nextSite: Site = {
+      key: siteKey,
+      name,
+      description: input.description?.trim() || '',
+      iconUrl: input.iconUrl?.trim() || '',
+      frontendUrls,
+      backendUrls,
+      groupKey: targetGroup.key,
+      order: Number.isFinite(input.order) ? Number(input.order) : sites.length + 1,
+      enable: input.enable !== false,
+      target: input.target === '_self' ? '_self' : '_blank'
+    }
+
+    if (editingIndex >= 0) {
+      sites.splice(editingIndex, 1, nextSite)
+    } else {
+      sites.push(nextSite)
+    }
+
+    replaceEditableSitesData(groups, sites)
+    return nextSite.key
+  }
+
+  function deleteSite(siteKey: string) {
+    if (!sitesData.value) return
+
+    const sites = (sitesData.value.sites || []).filter(site => site.key !== siteKey)
+    const groups = [...(sitesData.value.groups || [])]
+    replaceEditableSitesData(groups, sites)
+  }
+
+  function resetSitesOverride() {
+    localStorage.removeItem(SITES_OVERRIDE_STORAGE_KEY)
+    hasLocalSitesOverride.value = false
+
+    if (serverSitesData.value) {
+      const restored = cloneSitesData(serverSitesData.value)
+      sitesData.value = restored
+      networkType.value = restored.networkType || 'external'
+      clientIP.value = restored.clientIP || ''
+    }
   }
 
   // 加载 Docker 数据
@@ -311,10 +555,12 @@ export const useNavStore = defineStore('nav', () => {
     isLoading,
     loadError,
     navConfig,
+    serverSitesData,
     sitesData,
     networkType,
     networkTypeFetchFailed,
     clientIP,
+    hasLocalSitesOverride,
     dockerData,
     dockerStats,
     luckyServicesData,
@@ -323,6 +569,7 @@ export const useNavStore = defineStore('nav', () => {
 
     // 计算属性
     siteGroups,
+    editableSites,
     allSites,
     dockerGroups,
     allContainers,
@@ -340,6 +587,9 @@ export const useNavStore = defineStore('nav', () => {
     loadAllData,
     loadNavConfig,
     loadSitesData,
+    saveSite,
+    deleteSite,
+    resetSitesOverride,
     loadDockerData,
     loadLuckyServicesData,
     fetchNetworkType,

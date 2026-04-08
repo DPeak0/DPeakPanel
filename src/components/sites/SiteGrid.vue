@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useNavStore } from '@/stores/nav'
 import { useConfigStore } from '@/stores/config'
 import SiteCard from './SiteCard.vue'
+import SiteEditorPanel from './SiteEditorPanel.vue'
 import SearchBox from '@/components/common/SearchBox.vue'
 import GroupDropdown from '@/components/common/GroupDropdown.vue'
 import NetworkModeDropdown from '@/components/common/NetworkModeDropdown.vue'
 import LayoutSwitcher from '@/components/common/LayoutSwitcher.vue'
+import { Pencil, CircleAlert } from 'lucide-vue-next'
 import type { Site, Group } from '@/types'
 
 const navStore = useNavStore()
 const configStore = useConfigStore()
 const { searchKeywords } = storeToRefs(configStore)
+const siteEditorOpen = ref(false)
 
 // 搜索关键字
 const searchKeyword = computed({
@@ -130,6 +133,14 @@ const gridClass = computed(() => {
   }
 })
 
+function openSiteEditor() {
+  siteEditorOpen.value = true
+}
+
+function closeSiteEditor() {
+  siteEditorOpen.value = false
+}
+
 </script>
 
 <template>
@@ -142,6 +153,14 @@ const gridClass = computed(() => {
         color="cyan"
       />
       <div class="filter-bar-right">
+        <button class="site-editor-btn" @click="openSiteEditor">
+          <Pencil class="toolbar-icon" />
+          编辑
+        </button>
+        <div v-if="navStore.hasLocalSitesOverride" class="override-badge">
+          <CircleAlert class="toolbar-icon" />
+          已本地修改
+        </div>
         <GroupDropdown
           :groups="groups"
           :current="configStore.currentGroup"
@@ -202,6 +221,8 @@ const gridClass = computed(() => {
         <p class="empty-text">暂无站点</p>
       </div>
     </template>
+
+    <SiteEditorPanel :open="siteEditorOpen" @close="closeSiteEditor" />
   </div>
 </template>
 
@@ -228,6 +249,39 @@ const gridClass = computed(() => {
   flex-shrink: 0;
 }
 
+.site-editor-btn,
+.override-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg));
+  color: hsl(var(--text-primary));
+  white-space: nowrap;
+}
+
+.site-editor-btn {
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.site-editor-btn:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--neon-cyan) / 0.35);
+  box-shadow: 0 0 0 3px hsl(var(--neon-cyan) / 0.08);
+}
+
+.override-badge {
+  color: hsl(var(--warning));
+}
+
+.toolbar-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
 @media (max-width: 480px) {
   .filter-bar {
     flex-direction: column;
@@ -241,6 +295,7 @@ const gridClass = computed(() => {
   }
   
   .filter-bar-right {
+    flex-wrap: wrap;
     justify-content: space-evenly;
     gap: 0.5rem;
   }
