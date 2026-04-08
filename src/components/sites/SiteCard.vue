@@ -224,7 +224,11 @@ const iconUrl = computed(() => {
   const { iconUrl } = props.site
   if (!iconUrl) return null
 
-  if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
+  if (
+    iconUrl.startsWith('http://') ||
+    iconUrl.startsWith('https://') ||
+    iconUrl.startsWith('data:')
+  ) {
     return iconUrl
   }
 

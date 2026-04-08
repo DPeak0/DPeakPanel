@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useNavStore } from '@/stores/nav'
-import { Trash2, Save, X } from 'lucide-vue-next'
+import { Trash2, Save, X, Sparkles, ImagePlus, LoaderCircle } from 'lucide-vue-next'
+import SiteIconLibraryModal from './SiteIconLibraryModal.vue'
+import { autoResolveSiteIcon } from '@/utils/siteIcons'
 import type { Site } from '@/types'
 
 const props = withDefaults(defineProps<{
@@ -19,6 +21,9 @@ const emit = defineEmits<{
 
 const navStore = useNavStore()
 const errorMessage = ref('')
+const iconStatus = ref('')
+const isResolvingIcon = ref(false)
+const iconLibraryOpen = ref(false)
 
 const form = reactive({
   originalKey: '',
@@ -66,6 +71,7 @@ function resetForm() {
     target: '_blank'
   })
   errorMessage.value = ''
+  iconStatus.value = ''
 }
 
 function fillForm(site: Site | null) {
@@ -102,8 +108,38 @@ function closePanel() {
   emit('close')
 }
 
-function handleSave() {
+function getCandidateSiteUrls() {
+  return parseUrls(form.frontendUrlsText).concat(parseUrls(form.backendUrlsText))
+}
+
+async function resolveIconAutomatically() {
+  const candidateUrls = getCandidateSiteUrls()
+  if (candidateUrls.length === 0) {
+    throw new Error('请先填写站点链接')
+  }
+
+  isResolvingIcon.value = true
+  iconStatus.value = '正在自动查找图标...'
+
   try {
+    const result = await autoResolveSiteIcon(candidateUrls)
+    form.iconUrl = result.dataUrl
+    iconStatus.value = `已自动保存图标：${result.source}`
+  } finally {
+    isResolvingIcon.value = false
+  }
+}
+
+async function handleSave() {
+  try {
+    if (!form.iconUrl.trim()) {
+      try {
+        await resolveIconAutomatically()
+      } catch {
+        iconStatus.value = '未自动找到图标，可继续保存或改用图标库'
+      }
+    }
+
     navStore.saveSite({
       originalKey: form.originalKey || undefined,
       key: form.key,
@@ -131,6 +167,21 @@ function handleDelete() {
 
   navStore.deleteSite(form.originalKey)
   closePanel()
+}
+
+async function handleAutoIcon() {
+  errorMessage.value = ''
+
+  try {
+    await resolveIconAutomatically()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '自动获取图标失败'
+  }
+}
+
+function handleIconLibrarySelect(dataUrl: string) {
+  form.iconUrl = dataUrl
+  iconStatus.value = '已从图标库保存到本地'
 }
 
 watch(
@@ -216,7 +267,31 @@ watch(
 
           <label class="field field-full">
             <span class="field-label">图标地址</span>
-            <input v-model.trim="form.iconUrl" class="field-input" type="text" placeholder="支持 URL 或 iconlibs 路径" />
+            <div class="icon-actions">
+              <input
+                v-model.trim="form.iconUrl"
+                class="field-input"
+                type="text"
+                placeholder="支持 data URL、远程 URL 或自动识别结果"
+              />
+              <button class="mini-action" :disabled="isResolvingIcon" @click="handleAutoIcon">
+                <LoaderCircle v-if="isResolvingIcon" class="icon-sm spin" />
+                <Sparkles v-else class="icon-sm" />
+                自动获取
+              </button>
+              <button class="mini-action" @click="iconLibraryOpen = true">
+                <ImagePlus class="icon-sm" />
+                图标库
+              </button>
+            </div>
+            <div class="icon-preview-row">
+              <div class="icon-preview-box">
+                <img v-if="form.iconUrl" :src="form.iconUrl" alt="icon preview" class="icon-preview-image" />
+                <span v-else class="icon-preview-placeholder">无图标</span>
+              </div>
+              <button v-if="form.iconUrl" class="clear-link" @click="form.iconUrl = ''">清空图标</button>
+            </div>
+            <p v-if="iconStatus" class="helper-text">{{ iconStatus }}</p>
           </label>
 
           <label class="field field-full">
@@ -268,6 +343,12 @@ watch(
       </div>
     </div>
   </Transition>
+
+  <SiteIconLibraryModal
+    :open="iconLibraryOpen"
+    @close="iconLibraryOpen = false"
+    @select="handleIconLibrarySelect"
+  />
 </template>
 
 <style scoped>
@@ -358,6 +439,75 @@ watch(
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
+.icon-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.75rem;
+}
+
+.mini-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--text-primary));
+  padding: 0.8rem 0.95rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mini-action:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.icon-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.icon-preview-box {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 14px;
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.icon-preview-image {
+  width: 2rem;
+  height: 2rem;
+  object-fit: contain;
+}
+
+.icon-preview-placeholder,
+.helper-text,
+.clear-link {
+  font-size: 0.85rem;
+}
+
+.helper-text {
+  margin: 0.5rem 0 0;
+  color: hsl(var(--text-secondary));
+}
+
+.clear-link {
+  border: none;
+  background: transparent;
+  color: hsl(var(--warning));
+  cursor: pointer;
+  padding: 0;
+}
+
 .field-input:focus,
 .field-textarea:focus {
   border-color: hsl(var(--neon-cyan) / 0.55);
@@ -433,6 +583,15 @@ watch(
   height: 1rem;
 }
 
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .overlay-enter,
 .overlay-leave,
 .panel-enter,
@@ -457,6 +616,10 @@ watch(
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .icon-actions {
     grid-template-columns: 1fr;
   }
 
