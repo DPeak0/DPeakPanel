@@ -1,82 +1,343 @@
 {
-  "networkType": "external",
-  "clientIP": "192.168.1.100",
   "groups": [
-    { "key": "dev", "name": "开发工具", "icon": "" },
-    { "key": "media", "name": "影音娱乐", "icon": "" }
+    {
+      "key": "ml573lk1ewvbrjkue8p",
+      "name": "NAS",
+      "icon": "fa-folder",
+      "order": 0,
+      "collapsed": false
+    },
+    {
+      "key": "ml574dhhjuv7q82ab7b",
+      "name": "影视",
+      "icon": "fa-folder",
+      "order": 1,
+      "collapsed": false
+    },
+    {
+      "key": "ml5c9j9ekpwdxgg1grb",
+      "name": "其他",
+      "icon": "fa-folder",
+      "order": 2,
+      "collapsed": false
+    }
   ],
   "sites": [
     {
-      "key": "github",
-      "name": "GitHub",
-      "description": "全球最大的代码托管平台",
-      "groupKey": "dev",
-      "frontendUrls": ["https://github.com"],
+      "key": "ml5caj7ryxgmixj6s6",
+      "name": "哔哩哔哩 (゜-゜)つロ 干杯~-bilibili",
+      "description": "",
+      "frontendUrls": [
+        "https://www.bilibili.com/"
+      ],
       "backendUrls": [],
-      "iconUrl": "",
+      "iconUrl": "default_http/icon-m/Bilibili_A--哔哩哔哩--qdnas-s.png",
+      "groupKey": "ml574dhhjuv7q82ab7b",
+      "order": 0,
       "target": "_blank",
-      "enable": true,
-      "order": 1
+      "enable": true
     },
     {
-      "key": "google",
-      "name": "Google",
-      "description": "全球最大的搜索引擎",
-      "groupKey": "dev",
-      "frontendUrls": ["https://www.google.com"],
+      "key": "ml582ztxx3lxj9xvhd8",
+      "name": "DPeak Filma",
+      "description": "",
+      "frontendUrls": [
+        "https://emby.bwihz.cn/"
+      ],
       "backendUrls": [],
-      "iconUrl": "",
+      "iconUrl": "default_http/dashboard-icons/png/emby.png",
+      "groupKey": "ml574dhhjuv7q82ab7b",
+      "order": 1,
       "target": "_blank",
-      "enable": true,
-      "order": 2
+      "enable": true
     },
     {
-      "key": "youtube",
-      "name": "YouTube",
-      "description": "全球最大的视频平台",
-      "groupKey": "media",
-      "frontendUrls": ["https://www.youtube.com"],
-      "backendUrls": [],
+      "key": "ml574u1sx97uwl4r59",
+      "name": "轻课堂",
+      "description": "",
+      "frontendUrls": [],
+      "backendUrls": [
+        "http://100.66.1.1:8083"
+      ],
       "iconUrl": "",
+      "groupKey": "ml574dhhjuv7q82ab7b",
+      "order": 3,
       "target": "_blank",
-      "enable": true,
-      "order": 3
+      "enable": true
     },
     {
-      "key": "bilibili",
-      "name": "哔哩哔哩",
-      "description": "国内知名的弹幕视频网站",
-      "groupKey": "media",
-      "frontendUrls": ["https://www.bilibili.com"],
-      "backendUrls": [],
-      "iconUrl": "",
+      "key": "ml573xhsqroxoecfyg",
+      "name": "飞牛NAS",
+      "description": "",
+      "frontendUrls": [
+        "https://nas.bwihz.cn:8888",
+        "https://dbw666.5ddd.com"
+      ],
+      "backendUrls": [
+        "http://100.66.1.1:5666"
+      ],
+      "iconUrl": "default_http/HD-icons/border-radius/飞牛私有云_A.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 0,
       "target": "_blank",
-      "enable": true,
-      "order": 4
+      "enable": true
     },
     {
-      "key": "stackoverflow",
-      "name": "Stack Overflow",
-      "description": "程序员问答社区",
-      "groupKey": "dev",
-      "frontendUrls": ["https://stackoverflow.com"],
-      "backendUrls": [],
-      "iconUrl": "",
+      "key": "ml5743w4m9ez6wcmis",
+      "name": "OpenList",
+      "description": "",
+      "frontendUrls": [
+        "https://ol.bwihz.cn"
+      ],
+      "backendUrls": [
+        "http://100.66.1.1:5255"
+      ],
+      "iconUrl": "default_http/dashboard-icons/png/openlist.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 1,
       "target": "_blank",
-      "enable": true,
-      "order": 5
+      "enable": true
     },
     {
-      "key": "netflix",
-      "name": "Netflix",
-      "description": "全球流媒体平台",
-      "groupKey": "media",
-      "frontendUrls": ["https://www.netflix.com"],
+      "key": "ml58rncdbevq8n1hgka",
+      "name": "Lucky",
+      "description": "",
+      "frontendUrls": [],
+      "backendUrls": [
+        "http://100.66.1.1:16601/peak666"
+      ],
+      "iconUrl": "default_http/HD-icons/border-radius/Lucky_A.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 2,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml5cjgtzz4rliiupt37",
+      "name": "宝塔",
+      "description": "",
+      "frontendUrls": [
+        "https://154.9.228.32:8889/rainy",
+        "https://5.180.98.35:16563/peak666"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/icon-m/Baota--宝塔面板--qdnas-s.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 3,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml6s4lqc79za0apub22",
+      "name": "AllinSSL",
+      "description": "",
+      "frontendUrls": [],
+      "backendUrls": [
+        "http://100.66.1.1:8002/peak666"
+      ],
+      "iconUrl": "https://allinssl.com/logo.svg",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 4,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml5760v2f24v5ccy8zt",
+      "name": "Vaultwarden",
+      "description": "",
+      "frontendUrls": [
+        "https://p.bwihz.cn"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/icon-m/Vaultwarden--密码管理--qdnas-s.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 5,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml575tprm5jiq605kob",
+      "name": "v2raya",
+      "description": "",
+      "frontendUrls": [],
+      "backendUrls": [
+        "http://100.66.1.1:2017"
+      ],
+      "iconUrl": "default_http/HD-icons/border-radius/V2ray_A.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 6,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml70g2y44vmjoi4n2r4",
+      "name": "Dockports",
+      "description": "",
+      "frontendUrls": [],
+      "backendUrls": [
+        "http://100.66.1.1:7577"
+      ],
+      "iconUrl": "default_http/dashboard-icons/png/docker.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 7,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "mldbzmtrva8moxdfcrn",
+      "name": "qBittorrent",
+      "description": "",
+      "frontendUrls": [
+        "http://5.180.98.35:18080/"
+      ],
+      "backendUrls": [
+        "http://100.66.1.1:8085/"
+      ],
+      "iconUrl": "default_http/dashboard-icons/png/qbittorrent.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 8,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml6sjg27wkypjnl1yi",
+      "name": "CloudSaver",
+      "description": "",
+      "frontendUrls": [],
+      "backendUrls": [
+        "http://100.66.1.1:8008/"
+      ],
+      "iconUrl": "default_http/HD-icons/border-radius/Cloudsaver_A.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 9,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml7xh62byoi2z2c9qkc",
+      "name": "MoviePilot",
+      "description": "",
+      "frontendUrls": [
+        "http://5.180.98.35:3000/"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/HD-icons/border-radius/Moviepilot_A.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 10,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "mljiur2jwga6lw81ey",
+      "name": "天翼自动转存",
+      "description": "",
+      "frontendUrls": [
+        "http://199.7.140.147:13000/"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/dashboard-icons/svg/wd-mycloud.svg",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 11,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "mljj0hw4qu8dnabsud",
+      "name": "EmbyStats",
+      "description": "",
+      "frontendUrls": [
+        "https://stats.bwihz.cn/"
+      ],
       "backendUrls": [],
       "iconUrl": "",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 12,
       "target": "_blank",
-      "enable": true,
-      "order": 6
+      "enable": true
+    },
+    {
+      "key": "mm7u8fyov0pzse3cnif",
+      "name": "Clouddrive2",
+      "description": "",
+      "frontendUrls": [
+        "http://5.180.98.35:19798/"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/HD-icons/border-radius/Clouddrive_A.png",
+      "groupKey": "ml573lk1ewvbrjkue8p",
+      "order": 14,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml5ccryals63vz8to9p",
+      "name": "阿里云",
+      "description": "",
+      "frontendUrls": [
+        "https://home.console.aliyun.com/home/dashboard/ProductAndService"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/dashboard-icons/png/aliyun.png",
+      "groupKey": "ml5c9j9ekpwdxgg1grb",
+      "order": 0,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "mldc3vrdot8rnk5mn1g",
+      "name": "腾讯云",
+      "description": "",
+      "frontendUrls": [
+        "https://cloud.tencent.com/login?s_url=https%3A%2F%2Fconsole.cloud.tencent.com%2F%3FIs%3Dsdk-topnav"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/HD-icons/border-radius/Tencent_cloud_A.png",
+      "groupKey": "ml5c9j9ekpwdxgg1grb",
+      "order": 1,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "ml85r4gjxq4rsxibipl",
+      "name": "又拍云",
+      "description": "",
+      "frontendUrls": [
+        "https://console.upyun.com/login/?from=https:%2F%2Fwww.upyun.com%2F"
+      ],
+      "backendUrls": [],
+      "iconUrl": "https://console.upyun.com/assets/favicon.png",
+      "groupKey": "ml5c9j9ekpwdxgg1grb",
+      "order": 2,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "mn0y31s33m30k2vskej",
+      "name": "Cloudflare",
+      "description": "",
+      "frontendUrls": [
+        "https://dash.cloudflare.com/ada01b6305d6255ad8599d6bab7de4a2/home/overview"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/dashboard-icons/png/cloudflare.png",
+      "groupKey": "ml5c9j9ekpwdxgg1grb",
+      "order": 3,
+      "target": "_blank",
+      "enable": true
+    },
+    {
+      "key": "mldc3fgbqy46567mw5",
+      "name": "飞牛论坛",
+      "description": "",
+      "frontendUrls": [
+        "https://club.fnnas.com/"
+      ],
+      "backendUrls": [],
+      "iconUrl": "default_http/HD-icons/border-radius/飞牛私有云_A.png",
+      "groupKey": "ml5c9j9ekpwdxgg1grb",
+      "order": 4,
+      "target": "_blank",
+      "enable": true
     }
   ]
 }
