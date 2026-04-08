@@ -73,6 +73,29 @@ npm run preview
 
 ## 部署方式
 
+### Docker 镜像自动构建
+
+仓库已包含 GitHub Actions Docker 工作流：
+
+- Push 到 `main` 时自动构建并推送镜像
+- Push `v*` 标签时自动构建版本镜像
+- Pull Request 会执行镜像构建检查，但不会推送
+
+默认推送地址为：
+
+```bash
+ghcr.io/dpeak0/dpeakpanel:latest
+```
+
+也会同时生成分支、标签和 commit SHA 对应的镜像标签。
+
+拉取并运行示例：
+
+```bash
+docker pull ghcr.io/dpeak0/dpeakpanel:latest
+docker run -d --name dpeakpanel -p 18080:80 ghcr.io/dpeak0/dpeakpanel:latest
+```
+
 ### 在 Lucky Web服务中使用
 
 LightPanel 设计用于 Lucky 的 Web服务子规则中，作为轻面板类型的前端静态源。
