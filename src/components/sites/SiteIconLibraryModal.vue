@@ -13,7 +13,7 @@ import {
 import {
   clearTemplateSourceSearchCache,
   downloadImageAsDataUrlOrKeepUrl,
-  searchRemoteIcons,
+  loadRemoteIcons,
   type RemoteIconSearchItem
 } from '@/utils/siteIcons'
 
@@ -34,10 +34,9 @@ const errorMessage = ref('')
 const sourceErrorMessage = ref('')
 const sources = ref<SiteIconSource[]>([])
 const editingSourceKey = ref<string | null>(null)
-const remoteIcons = ref<RemoteIconSearchItem[]>([])
+const allRemoteIcons = ref<RemoteIconSearchItem[]>([])
 const selectedBrowseSourceKey = ref<'all' | string>('all')
 let searchAbortController: AbortController | null = null
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const sourceForm = reactive({
   key: '',
@@ -61,6 +60,20 @@ const activeBrowseSources = computed(() => {
     return enabledSources.value
   }
   return enabledSources.value.filter(source => source.key === selectedBrowseSourceKey.value)
+})
+const filteredRemoteIcons = computed(() => {
+  const search = keyword.value.trim().toLowerCase()
+  if (!search) {
+    return allRemoteIcons.value
+  }
+
+  return allRemoteIcons.value.filter(item =>
+    item.name.toLowerCase().includes(search) ||
+    item.collectionName.toLowerCase().includes(search) ||
+    item.sourceName.toLowerCase().includes(search) ||
+    item.id.toLowerCase().includes(search) ||
+    (item.relativePath || '').toLowerCase().includes(search)
+  )
 })
 
 function loadSources() {
@@ -174,14 +187,10 @@ function close() {
     searchAbortController.abort()
     searchAbortController = null
   }
-  if (searchTimer) {
-    clearTimeout(searchTimer)
-    searchTimer = null
-  }
   activeTab.value = 'browse'
   keyword.value = ''
   selectedBrowseSourceKey.value = 'all'
-  remoteIcons.value = []
+  allRemoteIcons.value = []
   isSearching.value = false
   errorMessage.value = ''
   sourceErrorMessage.value = ''
@@ -213,15 +222,13 @@ async function selectIcon(icon: RemoteIconSearchItem) {
   }
 }
 
-async function performSearch() {
-  const search = keyword.value.trim()
-
+async function loadBrowseIcons() {
   if (searchAbortController) {
     searchAbortController.abort()
   }
 
-  if (search.length < 2 || activeBrowseSources.value.length === 0) {
-    remoteIcons.value = []
+  if (activeBrowseSources.value.length === 0) {
+    allRemoteIcons.value = []
     isSearching.value = false
     errorMessage.value = ''
     return
@@ -232,11 +239,7 @@ async function performSearch() {
   errorMessage.value = ''
 
   try {
-    remoteIcons.value = await searchRemoteIcons(
-      search,
-      activeBrowseSources.value,
-      searchAbortController.signal
-    )
+    allRemoteIcons.value = await loadRemoteIcons(activeBrowseSources.value, searchAbortController.signal)
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return
@@ -256,46 +259,26 @@ watch(
     resetSourceForm()
     keyword.value = ''
     selectedBrowseSourceKey.value = 'all'
-    remoteIcons.value = []
+    allRemoteIcons.value = []
     errorMessage.value = ''
+    loadBrowseIcons()
   },
   { immediate: true }
 )
 
-watch(keyword, () => {
-  if (!props.open || activeTab.value !== 'browse') return
-
-  if (searchTimer) {
-    clearTimeout(searchTimer)
-  }
-
-  searchTimer = setTimeout(() => {
-    performSearch()
-  }, 260)
-})
-
 watch(activeTab, (tab) => {
   if (tab !== 'browse') return
-  if (keyword.value.trim().length >= 2) {
-    performSearch()
-  }
+  loadBrowseIcons()
 })
 
 watch(selectedBrowseSourceKey, () => {
   if (!props.open || activeTab.value !== 'browse') return
-  if (keyword.value.trim().length >= 2) {
-    performSearch()
-  } else {
-    remoteIcons.value = []
-  }
+  loadBrowseIcons()
 })
 
 onBeforeUnmount(() => {
   if (searchAbortController) {
     searchAbortController.abort()
-  }
-  if (searchTimer) {
-    clearTimeout(searchTimer)
   }
 })
 </script>
@@ -358,7 +341,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p class="helper-text">
-          输入至少 2 个字符后，会按当前来源筛选搜索图标。`全部` 会同时搜索所有已启用图标源，支持 Iconify 和你的私有文件浏览器源。
+          当前会直接加载所选来源的全部图标。搜索框仅用于在已加载结果里筛选，`全部` 会同时展示所有已启用图标源。
         </p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
 
@@ -366,22 +349,18 @@ onBeforeUnmount(() => {
           当前没有可用的已启用图标源，请先到“管理图标源”里启用至少一个来源。
         </div>
 
-        <div v-else-if="keyword.trim().length < 2" class="empty-search-state">
-          输入关键词开始搜索，例如 `emby`、`vaultwarden`、`movie`、`nas`
-        </div>
-
         <div v-else-if="isSearching" class="search-loading-state">
           <LoaderCircle class="icon-loading large" />
-          <span>正在搜索图标...</span>
+          <span>正在加载图标...</span>
         </div>
 
-        <div v-else-if="remoteIcons.length === 0" class="empty-search-state">
-          未找到匹配图标，试试英文品牌名或更短的关键词。
+        <div v-else-if="filteredRemoteIcons.length === 0" class="empty-search-state">
+          {{ keyword.trim() ? '未找到匹配图标，试试别的关键词。' : '当前来源下没有可显示的图标。' }}
         </div>
 
         <div v-else class="icon-grid">
           <button
-            v-for="item in remoteIcons"
+            v-for="item in filteredRemoteIcons"
             :key="item.id"
             class="icon-card"
             :disabled="loadingKey === item.id"

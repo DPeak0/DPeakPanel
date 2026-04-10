@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { SiteIconLibraryItem } from '@/data/siteIconLibrary'
+import { SITE_ICON_LIBRARY } from '@/data/siteIconLibrary'
 import {
   SITE_ICON_SOURCES_UPDATED_EVENT,
   loadSiteIconSources,
@@ -391,6 +392,44 @@ export async function searchRemoteIcons(
   return resultGroups
     .flat()
     .slice(0, limit)
+}
+
+function buildSimpleIconsIndex(source: SiteIconSource) {
+  return SITE_ICON_LIBRARY.map((item) => {
+    const iconUrl = buildSiteIconSourceUrl(source, item)
+    return {
+      id: `${source.key}:${item.key}`,
+      name: item.title,
+      collectionName: 'Simple Icons',
+      previewUrl: iconUrl,
+      downloadUrl: iconUrl,
+      sourceKey: source.key,
+      sourceName: source.name,
+      sourceType: 'simple-icons' as const,
+      relativePath: item.slug
+    }
+  })
+}
+
+export async function loadRemoteIcons(
+  sources: SiteIconSource[],
+  signal?: AbortSignal
+) {
+  const enabledSources = sources.filter(source => source.enabled)
+  if (enabledSources.length === 0) {
+    return [] as RemoteIconSearchItem[]
+  }
+
+  const resultGroups = await Promise.all(
+    enabledSources.map(async (source) => {
+      if (source.type === 'template') {
+        return getTemplateSourceIndex(source, signal)
+      }
+      return buildSimpleIconsIndex(source)
+    })
+  )
+
+  return resultGroups.flat()
 }
 
 function joinUrl(baseUrl: string, path: string) {
