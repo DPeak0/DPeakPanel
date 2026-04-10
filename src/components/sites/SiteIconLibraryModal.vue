@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
-import { Search, LoaderCircle, X, Plus, Pencil, Trash2, Check, FolderCog, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Search, LoaderCircle, X, Plus, Pencil, Trash2, Check, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
   DEFAULT_SITE_ICON_SOURCES,
   buildSiteIconSourcePayload,
@@ -375,79 +375,82 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-if="activeTab === 'browse'">
-        <div class="toolbar">
-          <div class="browse-source-filters">
-            <button
-              v-for="option in browseSourceOptions"
-              :key="option.key"
-              class="browse-source-btn"
-              :class="{ active: selectedBrowseSourceKey === option.key }"
-              @click="selectedBrowseSourceKey = option.key"
-            >
-              {{ option.name }}
-            </button>
-          </div>
-          <button class="manage-link" @click="activeTab = 'sources'">
-            <FolderCog class="icon-sm" />
-            管理图标源
-          </button>
-        </div>
-
-        <div class="search-bar">
-          <Search class="search-icon" />
-          <input v-model.trim="keyword" class="search-input" type="text" placeholder="搜索图标，例如 github / docker / media / cloudflare" />
-        </div>
-
-        <p class="helper-text">
-          默认按页加载图标，每次只请求当前页；输入关键词后会切换为分页搜索，避免一次性加载整库造成卡顿。
-        </p>
-        <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-
-        <div v-if="activeBrowseSources.length === 0" class="empty-search-state">
-          当前没有可用的已启用图标源，请先到“管理图标源”里启用至少一个来源。
-        </div>
-
-        <div v-else-if="isSearching" class="search-loading-state">
-          <LoaderCircle class="icon-loading large" />
-          <span>{{ keyword.trim() ? '正在搜索图标...' : '正在加载图标...' }}</span>
-        </div>
-
-        <div v-else-if="remoteIcons.length === 0" class="empty-search-state">
-          {{ keyword.trim() ? '未找到匹配图标，试试别的关键词。' : '当前来源下没有可显示的图标。' }}
-        </div>
-
-        <div v-else class="browse-results">
-          <div class="pagination-bar">
-            <span class="pagination-summary">{{ pageSummary }}</span>
-            <div class="pagination-actions">
-              <button class="page-btn" :disabled="currentPage <= 1 || isSearching" @click="goToPreviousPage">
-                <ChevronLeft class="icon-sm" />
-                上一页
-              </button>
-              <button class="page-btn" :disabled="!hasNextPage || isSearching" @click="goToNextPage">
-                下一页
-                <ChevronRight class="icon-sm" />
+        <div class="browse-shell">
+          <div class="browse-controls">
+            <div class="browse-source-filters">
+              <button
+                v-for="option in browseSourceOptions"
+                :key="option.key"
+                class="browse-source-btn"
+                :class="{ active: selectedBrowseSourceKey === option.key }"
+                @click="selectedBrowseSourceKey = option.key"
+              >
+                {{ option.name }}
               </button>
             </div>
+            <span class="browse-meta-pill">
+              {{ keyword.trim() ? '分页搜索' : `每页 ${PAGE_SIZE} 个` }}
+            </span>
           </div>
 
-          <div class="icon-grid">
-            <button
-              v-for="item in remoteIcons"
-              :key="item.id"
-              class="icon-card"
-              :disabled="loadingKey === item.id"
-              @click="selectIcon(item)"
-            >
-              <div class="icon-preview">
-                <LoaderCircle v-if="loadingKey === item.id" class="icon-loading" />
-                <img v-else :src="getPreviewUrl(item)" :alt="item.id" class="icon-image" loading="lazy" />
+          <div class="search-panel">
+            <div class="search-bar">
+              <Search class="search-icon" />
+              <input v-model.trim="keyword" class="search-input" type="text" placeholder="搜索图标，例如 github / docker / media / cloudflare" />
+            </div>
+            <p class="helper-text compact">
+              默认按页加载图标，每次只请求当前页；输入关键词后会切换为分页搜索，避免一次性加载整库造成卡顿。
+            </p>
+          </div>
+
+          <p v-if="errorMessage" class="error-text compact">{{ errorMessage }}</p>
+
+          <div v-if="activeBrowseSources.length === 0" class="empty-search-state browse-state">
+            当前没有可用的已启用图标源，请先到“管理图标源”里启用至少一个来源。
+          </div>
+
+          <div v-else-if="isSearching" class="search-loading-state browse-state">
+            <LoaderCircle class="icon-loading large" />
+            <span>{{ keyword.trim() ? '正在搜索图标...' : '正在加载图标...' }}</span>
+          </div>
+
+          <div v-else-if="remoteIcons.length === 0" class="empty-search-state browse-state">
+            {{ keyword.trim() ? '未找到匹配图标，试试别的关键词。' : '当前来源下没有可显示的图标。' }}
+          </div>
+
+          <div v-else class="browse-results">
+            <div class="pagination-bar">
+              <span class="pagination-summary">{{ pageSummary }}</span>
+              <div class="pagination-actions">
+                <button class="page-btn" :disabled="currentPage <= 1 || isSearching" @click="goToPreviousPage">
+                  <ChevronLeft class="icon-sm" />
+                  上一页
+                </button>
+                <button class="page-btn" :disabled="!hasNextPage || isSearching" @click="goToNextPage">
+                  下一页
+                  <ChevronRight class="icon-sm" />
+                </button>
               </div>
-              <span class="icon-title">{{ item.name }}</span>
-              <span class="icon-subtitle">{{ item.collectionName }}</span>
-              <span class="icon-source">{{ item.sourceName }}</span>
-              <span class="icon-key">{{ item.id }}</span>
-            </button>
+            </div>
+
+            <div class="icon-grid">
+              <button
+                v-for="item in remoteIcons"
+                :key="item.id"
+                class="icon-card"
+                :disabled="loadingKey === item.id"
+                @click="selectIcon(item)"
+              >
+                <div class="icon-preview">
+                  <LoaderCircle v-if="loadingKey === item.id" class="icon-loading" />
+                  <img v-else :src="getPreviewUrl(item)" :alt="item.id" class="icon-image" loading="lazy" />
+                </div>
+                <span class="icon-title">{{ item.name }}</span>
+                <span class="icon-subtitle">{{ item.collectionName }}</span>
+                <span class="icon-source">{{ item.sourceName }}</span>
+                <span class="icon-key">{{ item.id }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </template>
@@ -594,7 +597,6 @@ onBeforeUnmount(() => {
 }
 
 .tab-bar,
-.toolbar,
 .sources-toolbar,
 .editor-actions {
   display: flex;
@@ -607,15 +609,11 @@ onBeforeUnmount(() => {
   padding: 1rem 1.25rem 0;
 }
 
-.toolbar {
-  padding: 1rem 1.25rem 0;
-}
-
 .search-bar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1.25rem 0;
+  width: 100%;
 }
 
 .search-icon,
@@ -628,7 +626,6 @@ onBeforeUnmount(() => {
 .tab-btn,
 .icon-card,
 .close-btn,
-.manage-link,
 .primary-btn,
 .secondary-btn,
 .table-btn {
@@ -649,7 +646,6 @@ onBeforeUnmount(() => {
 }
 
 .close-btn,
-.manage-link,
 .primary-btn,
 .secondary-btn,
 .table-btn {
@@ -670,6 +666,27 @@ onBeforeUnmount(() => {
   background: hsl(var(--primary) / 0.16);
 }
 
+.browse-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 1rem 1.25rem 1.25rem;
+  padding: 1rem;
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: 22px;
+  background: linear-gradient(180deg, hsl(var(--glass-bg-hover)) 0%, hsl(var(--glass-bg) / 0.76) 100%);
+}
+
+.browse-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
 .browse-source-filters {
   display: flex;
   align-items: center;
@@ -677,20 +694,48 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.browse-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--glass-border));
+  color: hsl(var(--text-secondary));
+  font-size: 0.78rem;
+  white-space: nowrap;
+  background: hsl(var(--glass-bg));
+}
+
 .browse-source-btn {
   border: 1px solid hsl(var(--glass-border));
-  background: transparent;
+  background: hsl(var(--glass-bg));
   color: hsl(var(--text-secondary));
   cursor: pointer;
   padding: 0.6rem 0.9rem;
   border-radius: 999px;
-  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .browse-source-btn.active {
   background: hsl(var(--primary) / 0.16);
   border-color: hsl(var(--primary) / 0.34);
   color: hsl(var(--text-primary));
+}
+
+.browse-source-btn:hover {
+  transform: translateY(-1px);
+}
+
+.search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid hsl(var(--glass-border) / 0.85);
+  border-radius: 18px;
+  background: hsl(var(--glass-bg));
 }
 
 .source-select-wrap,
@@ -747,13 +792,17 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
 }
 
+.helper-text.compact,
+.error-text.compact {
+  padding: 0;
+}
+
 .error-text {
   color: hsl(var(--danger));
 }
 
 .empty-search-state,
 .search-loading-state {
-  margin: 0 1.25rem;
   padding: 1rem 1.1rem;
   border-radius: 16px;
   border: 1px dashed hsl(var(--glass-border));
@@ -768,11 +817,19 @@ onBeforeUnmount(() => {
   gap: 0.65rem;
 }
 
+.browse-state {
+  margin: 0;
+}
+
 .browse-results {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  border: 1px solid hsl(var(--glass-border) / 0.8);
+  border-radius: 20px;
+  background: hsl(var(--glass-bg));
+  overflow: hidden;
 }
 
 .pagination-bar,
@@ -785,7 +842,9 @@ onBeforeUnmount(() => {
 .pagination-bar {
   justify-content: space-between;
   gap: 0.9rem;
-  padding: 0.35rem 1.25rem 0;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid hsl(var(--glass-border) / 0.75);
+  background: hsl(var(--glass-bg-hover) / 0.92);
 }
 
 .pagination-actions {
@@ -801,7 +860,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 0.45rem;
   border: 1px solid hsl(var(--glass-border));
-  background: transparent;
+  background: hsl(var(--glass-bg));
   color: hsl(var(--text-primary));
   cursor: pointer;
   padding: 0.62rem 0.85rem;
@@ -817,9 +876,9 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
-  gap: 0.9rem;
-  padding: 1rem 1.25rem 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 0.85rem;
+  padding: 1rem;
 }
 
 .icon-card {
@@ -829,6 +888,8 @@ onBeforeUnmount(() => {
   gap: 0.65rem;
   padding: 0.9rem 0.75rem;
   border-radius: 18px;
+  border-color: hsl(var(--glass-border) / 0.75);
+  background: linear-gradient(180deg, hsl(var(--glass-bg-hover)) 0%, hsl(var(--glass-bg)) 100%);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -864,6 +925,7 @@ onBeforeUnmount(() => {
   text-align: center;
   color: hsl(var(--text-primary));
   word-break: break-word;
+  line-height: 1.3;
 }
 
 .icon-subtitle {
@@ -871,6 +933,7 @@ onBeforeUnmount(() => {
   color: hsl(var(--text-secondary));
   text-align: center;
   word-break: break-word;
+  line-height: 1.25;
 }
 
 .icon-source {
@@ -1011,10 +1074,14 @@ onBeforeUnmount(() => {
   }
 
   .tab-bar,
-  .toolbar,
   .sources-toolbar,
   .editor-actions {
     flex-wrap: wrap;
+  }
+
+  .pagination-bar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .sources-layout {
@@ -1037,6 +1104,11 @@ onBeforeUnmount(() => {
 
   .icon-grid {
     grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  }
+
+  .browse-shell {
+    margin: 0.85rem;
+    padding: 0.85rem;
   }
 }
 </style>
