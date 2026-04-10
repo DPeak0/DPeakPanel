@@ -11,6 +11,7 @@ import type {
   DockerContainer,
   Group,
   NetworkType,
+  NetworkTypeResponse,
   SiteEditorInput
 } from '@/types'
 
@@ -20,7 +21,7 @@ const API = {
   sites: './backend/sites.json',
   docker: ['./backend/runtime/docker.json', './backend/docker.json'],
   dockerStats: ['./backend/runtime/docker-stats.json', './backend/docker-stats.json'],
-  networkType: './backend/api/network-type',
+  networkType: './backend/network-type.json',
   config: './backend/default-config.json'
 }
 
@@ -119,6 +120,52 @@ function normalizeSiteOrders(groups: Group[], sites: Site[]) {
   })
 
   return normalized
+}
+
+function isPrivateIpv4(hostname: string) {
+  const parts = hostname.split('.').map(Number)
+  if (parts.length !== 4 || parts.some(part => Number.isNaN(part) || part < 0 || part > 255)) {
+    return false
+  }
+
+  const [a, b] = parts
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 192 && b === 168) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254)
+  )
+}
+
+function inferNetworkTypeFromHostname(hostname: string): NetworkType | null {
+  const normalized = hostname.trim().toLowerCase()
+  if (!normalized) return null
+
+  if (
+    normalized === 'localhost' ||
+    normalized.endsWith('.local') ||
+    normalized.endsWith('.lan') ||
+    normalized.endsWith('.home') ||
+    normalized.endsWith('.internal')
+  ) {
+    return 'internal'
+  }
+
+  if (isPrivateIpv4(normalized)) {
+    return 'internal'
+  }
+
+  if (normalized === '::1' || normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) {
+    return 'internal'
+  }
+
+  if (normalized.includes('.')) {
+    return 'external'
+  }
+
+  return null
 }
 
 export const useNavStore = defineStore('nav', () => {
@@ -547,25 +594,37 @@ export const useNavStore = defineStore('nav', () => {
 
   // 获取网络类型（用于自动/混合模式）
   async function fetchNetworkType() {
-    try {
-      const response = await fetch(API.networkType)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.networkType) {
-          networkType.value = data.networkType
-          clientIP.value = data.clientIP || ''
-          networkTypeFetchFailed.value = false  // 查询成功
-          console.log('Network type updated:', networkType.value, 'Client IP:', clientIP.value)
-          return
-        }
-      }
-      // 响应不 ok 或没有 networkType 数据，视为失败
-      networkTypeFetchFailed.value = true
-      console.warn('Failed to fetch network type: invalid response')
-    } catch (error) {
-      networkTypeFetchFailed.value = true  // 查询失败
-      console.warn('Failed to fetch network type:', error)
+    const apiData = await fetchJsonFromSources<NetworkTypeResponse>(API.networkType)
+    if (apiData?.networkType) {
+      networkType.value = apiData.networkType
+      clientIP.value = apiData.clientIP || ''
+      networkTypeFetchFailed.value = false
+      console.log('Network type updated from backend:', networkType.value, 'Client IP:', clientIP.value)
+      return
     }
+
+    const inferredType = inferNetworkTypeFromHostname(window.location.hostname)
+    if (inferredType) {
+      networkType.value = inferredType
+      clientIP.value = isPrivateIpv4(window.location.hostname) ? window.location.hostname : ''
+      networkTypeFetchFailed.value = false
+      console.log('Network type inferred from hostname:', networkType.value, 'Host:', window.location.hostname)
+      return
+    }
+
+    const fallbackSitesData = sitesData.value || serverSitesData.value
+    if (fallbackSitesData?.networkType) {
+      networkType.value = fallbackSitesData.networkType
+      clientIP.value = fallbackSitesData.clientIP || ''
+      networkTypeFetchFailed.value = false
+      console.log('Network type restored from sites payload:', networkType.value, 'Client IP:', clientIP.value)
+      return
+    }
+
+    networkType.value = 'external'
+    clientIP.value = ''
+    networkTypeFetchFailed.value = true
+    console.warn('Failed to determine network type, falling back to external mode')
   }
 
   // 获取服务器配置

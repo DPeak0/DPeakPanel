@@ -1,0 +1,17 @@
+{
+  "ret": 0,
+  "config": {
+    "theme": "dark",
+    "background": "ocean",
+    "layout": "normal",
+    "dockerLayout": "list",
+    "networkMode": "hybrid",
+    "currentTab": "sites",
+    "showDescription": true,
+    "showTime": true,
+    "showSearch": false,
+    "showHeader": true,
+    "searchEngine": "bing",
+    "customSearchUrl": ""
+  }
+}
