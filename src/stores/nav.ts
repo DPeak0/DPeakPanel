@@ -473,6 +473,37 @@ export const useNavStore = defineStore('nav', () => {
     ])
   }
 
+  function reorderVisibleSites(nextGroups: Array<{ groupKey: string; sites: Site[] }>) {
+    if (!sitesData.value) return
+
+    const groups = [...(sitesData.value.groups || [])].map(group => ({ ...group }))
+    const currentSites = [...(sitesData.value.sites || [])].map(site => ({
+      ...site,
+      frontendUrls: [...(site.frontendUrls || [])],
+      backendUrls: [...(site.backendUrls || [])]
+    }))
+
+    const visibleSiteKeys = new Set(
+      nextGroups.flatMap(group => group.sites.map(site => site.key))
+    )
+
+    const hiddenSites = currentSites.filter(site => !visibleSiteKeys.has(site.key))
+    const reorderedSites = nextGroups.flatMap(group =>
+      group.sites.map((site, index) => ({
+        ...site,
+        groupKey: group.groupKey,
+        order: index,
+        frontendUrls: [...(site.frontendUrls || [])],
+        backendUrls: [...(site.backendUrls || [])]
+      }))
+    )
+
+    replaceEditableSitesData(groups, [
+      ...hiddenSites,
+      ...reorderedSites
+    ])
+  }
+
   function resetSitesOverride() {
     localStorage.removeItem(SITES_OVERRIDE_STORAGE_KEY)
     hasLocalSitesOverride.value = false
@@ -635,6 +666,7 @@ export const useNavStore = defineStore('nav', () => {
     saveSite,
     deleteSite,
     moveSite,
+    reorderVisibleSites,
     resetSitesOverride,
     loadDockerData,
     fetchNetworkType,
