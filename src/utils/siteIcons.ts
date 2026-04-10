@@ -186,6 +186,18 @@ function joinUrl(baseUrl: string, path: string) {
   return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
 }
 
+function buildCandidateRelativePaths(path: string) {
+  const normalizedPath = path.trim().replace(/^\.\/+/, '')
+  if (!normalizedPath) return []
+
+  const candidates = [normalizedPath]
+  if (normalizedPath.startsWith('default_http/')) {
+    candidates.unshift(normalizedPath.slice('default_http/'.length))
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)))
+}
+
 function getTemplateSourceBaseUrl(source: SiteIconSource) {
   if (source.type !== 'template') return null
 
@@ -207,13 +219,19 @@ export function resolveRelativeIconUrl(path: string, sources = loadSiteIconSourc
   if (!normalizedPath) return null
 
   const enabledTemplateSources = sources.filter(source => source.enabled && source.type === 'template')
+  const candidatePaths = buildCandidateRelativePaths(normalizedPath)
+
   for (const source of enabledTemplateSources) {
     const baseUrl = getTemplateSourceBaseUrl(source)
     if (!baseUrl) continue
-    return joinUrl(baseUrl, normalizedPath)
+
+    const matchedPath = candidatePaths[0]
+    if (matchedPath) {
+      return joinUrl(baseUrl, matchedPath)
+    }
   }
 
-  return `./backend/iconlibs/${normalizedPath}`
+  return `./backend/iconlibs/${candidatePaths[0] || normalizedPath}`
 }
 
 export function resolveIconUrl(iconPath: string | null | undefined, sources = loadSiteIconSources()) {
