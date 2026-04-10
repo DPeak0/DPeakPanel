@@ -4,6 +4,7 @@ import { useConfigStore } from './config'
 import { useAuthStore } from './auth'
 import type {
   NavConfig,
+  PanelDefinition,
   SitesData,
   DockerData,
   DockerStatsResponse,
@@ -23,7 +24,8 @@ const API = {
   docker: ['./backend/runtime/docker.json', './backend/docker.json'],
   dockerStats: ['./backend/runtime/docker-stats.json', './backend/docker-stats.json'],
   networkType: './backend/network-type.json',
-  config: './backend/default-config.json'
+  config: './backend/default-config.json',
+  panelDefinition: './LuckyLightPanel.json'
 }
 
 const SITES_OVERRIDE_STORAGE_KEY = 'lightpanel_sites_override'
@@ -178,6 +180,7 @@ export const useNavStore = defineStore('nav', () => {
 
   // 全局配置
   const navConfig = ref<NavConfig | null>(null)
+  const panelDefinition = ref<PanelDefinition | null>(null)
 
   // 站点数据
   const serverSitesData = ref<SitesData | null>(null)
@@ -384,6 +387,14 @@ export const useNavStore = defineStore('nav', () => {
       configStore.setServerBackgrounds(bgImages)
     }
     return config
+  }
+
+  async function loadPanelDefinition() {
+    const definition = await fetchJson<PanelDefinition>(API.panelDefinition)
+    if (definition) {
+      panelDefinition.value = definition
+    }
+    return definition
   }
 
   // 加载站点数据
@@ -601,6 +612,7 @@ export const useNavStore = defineStore('nav', () => {
     try {
       // 先加载基础配置
       await loadNavConfig()
+      await loadPanelDefinition()
       // 同时加载所有数据源
       await Promise.all([
         loadSitesData(),
@@ -716,6 +728,7 @@ export const useNavStore = defineStore('nav', () => {
     isLoading,
     loadError,
     navConfig,
+    panelDefinition,
     serverSitesData,
     sitesData,
     networkType,
@@ -746,6 +759,7 @@ export const useNavStore = defineStore('nav', () => {
     // 方法
     loadAllData,
     loadNavConfig,
+    loadPanelDefinition,
     loadSitesData,
     saveSite,
     deleteSite,

@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useConfigStore, PRESET_BACKGROUNDS } from '@/stores/config'
 import { useNavStore } from '@/stores/nav'
 import { useAuthStore } from '@/stores/auth'
-import { X, Sun, Moon, Pencil, RotateCcw, Palette, Eye, Check, Image, Github, Search, Globe, ShieldCheck, UserCog, UserRound, Plus, Save, Trash2, LockKeyhole } from 'lucide-vue-next'
+import { X, Sun, Moon, Pencil, Palette, Eye, Check, Image, Github, Search, Globe, ShieldCheck, UserCog, UserRound, Plus, Save, Trash2, LockKeyhole } from 'lucide-vue-next'
 import type { AuthRole, ThemeMode, UserGroupPermissions } from '@/types'
 
 // 导入本地图标
@@ -54,6 +54,43 @@ const SEARCH_ENGINES = [
 const customSearchUrlInput = ref(configStore.customSearchUrl)
 const authErrorMessage = ref('')
 const editingUserId = ref<string | null>(null)
+const panelDefinition = computed(() => navStore.panelDefinition)
+const panelSchemaEntries = computed(() => {
+  const schema = panelDefinition.value?.configSchema || {}
+  return Object.entries(schema)
+})
+const jsonOverviewItems = computed(() => [
+  {
+    key: 'panel-definition',
+    title: 'LuckyLightPanel.json',
+    value: panelDefinition.value ? `${panelDefinition.value.name} ${panelDefinition.value.version || ''}`.trim() : '未加载',
+    description: panelDefinition.value?.description || '前端配置 schema 入口'
+  },
+  {
+    key: 'nav-json',
+    title: 'nav.json',
+    value: `${navStore.panelTitle || '-'} / ${navStore.panelSubtitle || '无副标题'}`,
+    description: `站点模块 ${navStore.sitesEnabled ? '开启' : '关闭'}，Docker 模块 ${navStore.dockerEnabled ? '开启' : '关闭'}`
+  },
+  {
+    key: 'default-config',
+    title: 'default-config.json',
+    value: `${configStore.theme} / ${configStore.layout}`,
+    description: `默认标签页 ${configStore.currentTab}，网络模式 ${configStore.networkMode}`
+  },
+  {
+    key: 'sites-json',
+    title: 'sites.json',
+    value: `${navStore.siteGroups.length} 个分组`,
+    description: `${navStore.allSites.length} 个站点，当前可见 ${navStore.visibleSites.length} 个`
+  },
+  {
+    key: 'docker-json',
+    title: 'docker.json',
+    value: `${navStore.dockerGroups.length} 个分组`,
+    description: `${navStore.allContainers.length} 个容器，当前可见 ${navStore.visibleContainers.length} 个`
+  }
+])
 
 const userForm = reactive<{
   username: string
@@ -77,6 +114,17 @@ const managedUsers = computed(() => authStore.users)
 // 保存自定义搜索 URL
 function saveCustomSearchUrl() {
   configStore.setCustomSearchUrl(customSearchUrlInput.value)
+}
+
+function formatSchemaValue(key: string) {
+  const rawValue = (configStore.config as Record<string, unknown>)[key]
+  if (typeof rawValue === 'boolean') {
+    return rawValue ? '开启' : '关闭'
+  }
+  if (rawValue === null || rawValue === undefined || rawValue === '') {
+    return '未设置'
+  }
+  return String(rawValue)
 }
 
 function resetUserForm() {
@@ -522,18 +570,56 @@ watch(() => authStore.canManageSettings, (allowed) => {
             </div>
           </div>
         </section>
+
+        <section class="settings-section">
+          <div class="section-header">
+            <Github class="section-icon purple" />
+            <h3 class="section-title">前端配置接口</h3>
+          </div>
+
+          <div class="json-overview-grid">
+            <div v-for="item in jsonOverviewItems" :key="item.key" class="json-overview-card">
+              <span class="json-overview-title">{{ item.title }}</span>
+              <strong class="json-overview-value">{{ item.value }}</strong>
+              <span class="json-overview-desc">{{ item.description }}</span>
+            </div>
+          </div>
+
+          <div class="schema-panel">
+            <div class="section-header sub-header">
+              <Globe class="section-icon cyan" />
+              <h4 class="section-subtitle">LuckyLightPanel.json 设置项</h4>
+            </div>
+
+            <div v-if="panelSchemaEntries.length > 0" class="schema-list">
+              <div v-for="[key, field] in panelSchemaEntries" :key="key" class="schema-item">
+                <div class="schema-item-head">
+                  <div>
+                    <strong class="schema-item-title">{{ field.label }}</strong>
+                    <p class="schema-item-desc">{{ field.description || '无说明' }}</p>
+                  </div>
+                  <span class="schema-item-type">{{ field.type }}</span>
+                </div>
+                <div class="schema-item-meta">
+                  <span class="schema-badge">键名 {{ key }}</span>
+                  <span class="schema-badge">当前 {{ formatSchemaValue(key) }}</span>
+                  <span class="schema-badge">默认 {{ String(field.default) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <p v-else class="toggle-hint">
+              当前未读取到 LuckyLightPanel.json 配置 schema。
+            </p>
+          </div>
+        </section>
       </div>
 
       <!-- 底部 -->
       <div class="panel-footer">
-        <button class="reset-btn" @click="configStore.resetConfig()">
-          <RotateCcw class="reset-icon" />
-          <span>重置所有设置</span>
-        </button>
-        
         <!-- 开源地址 -->
         <a 
-          href="https://github.com/gdy666/LuckyLightPanel" 
+          href="https://github.com/DPeak0/DPeakPanel" 
           target="_blank" 
           rel="noopener noreferrer"
           class="github-link"
@@ -1136,6 +1222,114 @@ watch(() => authStore.canManageSettings, (allowed) => {
 .small-icon {
   width: 0.9rem;
   height: 0.9rem;
+}
+
+.json-overview-grid,
+.schema-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.json-overview-grid {
+  grid-template-columns: 1fr;
+}
+
+.json-overview-card,
+.schema-panel,
+.schema-item {
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg));
+}
+
+.json-overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+}
+
+.json-overview-title,
+.json-overview-desc,
+.schema-item-desc {
+  color: hsl(var(--text-secondary));
+}
+
+.json-overview-title {
+  font-size: 0.72rem;
+}
+
+.json-overview-value,
+.schema-item-title {
+  color: hsl(var(--text-primary));
+}
+
+.json-overview-value {
+  font-size: 0.88rem;
+}
+
+.json-overview-desc,
+.schema-item-desc,
+.schema-badge,
+.schema-item-type {
+  font-size: 0.72rem;
+}
+
+.schema-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border-radius: 1rem;
+}
+
+.schema-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-radius: 0.9rem;
+}
+
+.schema-item-head,
+.schema-item-meta {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.schema-item-head {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.schema-item-desc {
+  margin: 0.25rem 0 0;
+  line-height: 1.45;
+}
+
+.schema-item-type,
+.schema-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--glass-border));
+  white-space: nowrap;
+}
+
+.schema-item-type {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.12);
+}
+
+.schema-item-meta {
+  flex-wrap: wrap;
+}
+
+.schema-badge {
+  color: hsl(var(--text-secondary));
 }
 
 /* 图标颜色 */

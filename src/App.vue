@@ -133,7 +133,8 @@ onMounted(async () => {
 
   try {
     // 加载基础配置（nav.json）和服务器配置
-    const [, serverConfig] = await Promise.all([
+    const [, , serverConfig] = await Promise.all([
+      navStore.loadPanelDefinition(),
       navStore.loadNavConfig(),
       navStore.fetchServerConfig()
     ])

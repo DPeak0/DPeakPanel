@@ -59,6 +59,26 @@ export interface AuthSettings {
   requireLogin: boolean
 }
 
+export interface ConfigSchemaOption {
+  value: string | number | boolean
+  label: string
+}
+
+export interface ConfigSchemaField {
+  type: 'select' | 'boolean' | 'text' | 'number'
+  label: string
+  description?: string
+  default: string | number | boolean
+  options?: ConfigSchemaOption[]
+}
+
+export interface PanelDefinition {
+  name: string
+  version?: string
+  description?: string
+  configSchema: Record<string, ConfigSchemaField>
+}
+
 // ============ 站点类型 ============
 
 /** 站点数据响应 */
