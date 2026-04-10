@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, onBeforeUnmount } from 'vue'
 import { Search, LoaderCircle, X, Plus, Pencil, Trash2, Check, FolderCog } from 'lucide-vue-next'
-import { SITE_ICON_LIBRARY } from '@/data/siteIconLibrary'
 import {
   DEFAULT_SITE_ICON_SOURCES,
   buildSiteIconSourcePayload,
@@ -12,8 +11,10 @@ import {
   type SiteIconSourceType
 } from '@/data/siteIconSources'
 import {
-  buildSiteIconSourceUrl,
-  downloadImageAsDataUrlOrKeepUrl
+  buildIconifyIconUrl,
+  downloadImageAsDataUrlOrKeepUrl,
+  searchRemoteIcons,
+  type RemoteIconSearchItem
 } from '@/utils/siteIcons'
 
 const props = defineProps<{
@@ -28,11 +29,14 @@ const emit = defineEmits<{
 const activeTab = ref<'browse' | 'sources'>('browse')
 const keyword = ref('')
 const loadingKey = ref('')
+const isSearching = ref(false)
 const errorMessage = ref('')
 const sourceErrorMessage = ref('')
 const sources = ref<SiteIconSource[]>([])
-const selectedSourceKey = ref('')
 const editingSourceKey = ref<string | null>(null)
+const remoteIcons = ref<RemoteIconSearchItem[]>([])
+let searchAbortController: AbortController | null = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const sourceForm = reactive({
   key: '',
@@ -43,31 +47,8 @@ const sourceForm = reactive({
   enabled: true
 })
 
-const filteredIcons = computed(() => {
-  const search = keyword.value.trim().toLowerCase()
-  if (!search) return SITE_ICON_LIBRARY
-
-  return SITE_ICON_LIBRARY.filter(item =>
-    item.title.toLowerCase().includes(search) ||
-    item.slug.toLowerCase().includes(search) ||
-    item.keywords.some(word => word.toLowerCase().includes(search))
-  )
-})
-
-const enabledSources = computed(() => sources.value.filter(item => item.enabled))
-const selectedSource = computed(() => {
-  return enabledSources.value.find(item => item.key === selectedSourceKey.value)
-    || enabledSources.value[0]
-    || sources.value[0]
-    || null
-})
-
 function loadSources() {
   sources.value = loadSiteIconSources()
-
-  if (!sources.value.some(item => item.key === selectedSourceKey.value)) {
-    selectedSourceKey.value = enabledSources.value[0]?.key || sources.value[0]?.key || ''
-  }
 }
 
 function saveSources() {
@@ -128,7 +109,6 @@ function persistSource() {
   }
 
   saveSources()
-  selectedSourceKey.value = nextSource.enabled ? nextSource.key : (enabledSources.value[0]?.key || nextSource.key)
   resetSourceForm()
 }
 
@@ -144,10 +124,6 @@ function removeSource(source: SiteIconSource) {
 
   sources.value = sources.value.filter(item => item.key !== source.key)
   saveSources()
-
-  if (selectedSourceKey.value === source.key) {
-    selectedSourceKey.value = enabledSources.value[0]?.key || sources.value[0]?.key || ''
-  }
 
   if (editingSourceKey.value === source.key) {
     resetSourceForm()
@@ -167,40 +143,42 @@ function toggleSourceEnabled(source: SiteIconSource) {
       : item
   )
   saveSources()
-
-  if (!enabledSources.value.some(item => item.key === selectedSourceKey.value)) {
-    selectedSourceKey.value = enabledSources.value[0]?.key || ''
-  }
 }
 
 function close() {
+  if (searchAbortController) {
+    searchAbortController.abort()
+    searchAbortController = null
+  }
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
   activeTab.value = 'browse'
   keyword.value = ''
+  remoteIcons.value = []
+  isSearching.value = false
   errorMessage.value = ''
   sourceErrorMessage.value = ''
   emit('close')
 }
 
-function getPreviewUrl(itemKey: string) {
-  const item = SITE_ICON_LIBRARY.find(entry => entry.key === itemKey)
-  if (!selectedSource.value || !item) return ''
-  return buildSiteIconSourceUrl(selectedSource.value, item)
+function getPreviewUrl(icon: RemoteIconSearchItem) {
+  return buildIconifyIconUrl(icon.id)
 }
 
-async function selectIcon(itemKey: string) {
-  const item = SITE_ICON_LIBRARY.find(entry => entry.key === itemKey)
-  if (!selectedSource.value || !item) {
-    errorMessage.value = '当前没有可用的图标源'
+async function selectIcon(icon: RemoteIconSearchItem) {
+  const iconUrl = buildIconifyIconUrl(icon.id)
+  if (!iconUrl) {
+    errorMessage.value = '图标地址生成失败'
     return
   }
 
-  loadingKey.value = itemKey
+  loadingKey.value = icon.id
   errorMessage.value = ''
 
   try {
-    const iconValue = await downloadImageAsDataUrlOrKeepUrl(
-      buildSiteIconSourceUrl(selectedSource.value, item)
-    )
+    const iconValue = await downloadImageAsDataUrlOrKeepUrl(iconUrl)
     emit('select', iconValue)
     close()
   } catch (error) {
@@ -210,15 +188,77 @@ async function selectIcon(itemKey: string) {
   }
 }
 
+async function performSearch() {
+  const search = keyword.value.trim()
+
+  if (searchAbortController) {
+    searchAbortController.abort()
+  }
+
+  if (search.length < 2) {
+    remoteIcons.value = []
+    isSearching.value = false
+    errorMessage.value = ''
+    return
+  }
+
+  searchAbortController = new AbortController()
+  isSearching.value = true
+  errorMessage.value = ''
+
+  try {
+    remoteIcons.value = await searchRemoteIcons(search, searchAbortController.signal)
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return
+    }
+    errorMessage.value = error instanceof Error ? error.message : '远程搜索失败'
+  } finally {
+    isSearching.value = false
+    searchAbortController = null
+  }
+}
+
 watch(
   () => props.open,
   (open) => {
     if (!open) return
     loadSources()
     resetSourceForm()
+    keyword.value = ''
+    remoteIcons.value = []
+    errorMessage.value = ''
   },
   { immediate: true }
 )
+
+watch(keyword, () => {
+  if (!props.open || activeTab.value !== 'browse') return
+
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+
+  searchTimer = setTimeout(() => {
+    performSearch()
+  }, 260)
+})
+
+watch(activeTab, (tab) => {
+  if (tab !== 'browse') return
+  if (keyword.value.trim().length >= 2) {
+    performSearch()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (searchAbortController) {
+    searchAbortController.abort()
+  }
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+})
 </script>
 
 <template>
@@ -256,14 +296,7 @@ watch(
 
       <template v-if="activeTab === 'browse'">
         <div class="toolbar">
-          <label class="source-select-wrap">
-            <span class="source-label">图标源</span>
-            <select v-model="selectedSourceKey" class="source-select">
-              <option v-for="source in enabledSources" :key="source.key" :value="source.key">
-                {{ source.name }}
-              </option>
-            </select>
-          </label>
+          <div class="remote-api-badge">远程搜索 · Iconify API</div>
           <button class="manage-link" @click="activeTab = 'sources'">
             <FolderCog class="icon-sm" />
             管理图标源
@@ -272,27 +305,42 @@ watch(
 
         <div class="search-bar">
           <Search class="search-icon" />
-          <input v-model.trim="keyword" class="search-input" type="text" placeholder="搜索图标，例如 github / docker / media" />
+          <input v-model.trim="keyword" class="search-input" type="text" placeholder="搜索图标，例如 github / docker / media / cloudflare" />
         </div>
 
-        <p v-if="selectedSource" class="helper-text">
-          当前图标源：{{ selectedSource.name }}。选择时优先下载为本地 data URL，失败时自动回退为远程地址。通用模板支持 `{path}`，会同时作为旧图标路径的远程资源根地址。
+        <p class="helper-text">
+          输入至少 2 个字符后，会通过 Iconify 官方 API 实时搜索图标。选中时优先下载为本地 data URL，失败时自动回退为远程地址。
         </p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
 
-        <div class="icon-grid">
+        <div v-if="keyword.trim().length < 2" class="empty-search-state">
+          输入关键词开始搜索，例如 `emby`、`vaultwarden`、`movie`、`nas`
+        </div>
+
+        <div v-else-if="isSearching" class="search-loading-state">
+          <LoaderCircle class="icon-loading large" />
+          <span>正在搜索图标...</span>
+        </div>
+
+        <div v-else-if="remoteIcons.length === 0" class="empty-search-state">
+          未找到匹配图标，试试英文品牌名或更短的关键词。
+        </div>
+
+        <div v-else class="icon-grid">
           <button
-            v-for="item in filteredIcons"
-            :key="item.key"
+            v-for="item in remoteIcons"
+            :key="item.id"
             class="icon-card"
-            :disabled="loadingKey === item.key || !selectedSource"
-            @click="selectIcon(item.key)"
+            :disabled="loadingKey === item.id"
+            @click="selectIcon(item)"
           >
             <div class="icon-preview">
-              <LoaderCircle v-if="loadingKey === item.key" class="icon-loading" />
-              <img v-else :src="getPreviewUrl(item.key)" :alt="item.title" class="icon-image" loading="lazy" />
+              <LoaderCircle v-if="loadingKey === item.id" class="icon-loading" />
+              <img v-else :src="getPreviewUrl(item)" :alt="item.id" class="icon-image" loading="lazy" />
             </div>
-            <span class="icon-title">{{ item.title }}</span>
+            <span class="icon-title">{{ item.name }}</span>
+            <span class="icon-subtitle">{{ item.collectionName }}</span>
+            <span class="icon-key">{{ item.id }}</span>
           </button>
         </div>
       </template>
@@ -515,6 +563,18 @@ watch(
   background: hsl(var(--primary) / 0.16);
 }
 
+.remote-api-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--text-secondary));
+  font-size: 0.85rem;
+}
+
 .source-select-wrap,
 .toggle-row {
   display: flex;
@@ -573,6 +633,23 @@ watch(
   color: hsl(var(--danger));
 }
 
+.empty-search-state,
+.search-loading-state {
+  margin: 0 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px dashed hsl(var(--glass-border));
+  background: hsl(var(--glass-bg-hover));
+  color: hsl(var(--text-secondary));
+  font-size: 0.9rem;
+}
+
+.search-loading-state {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .icon-grid {
   flex: 1;
   overflow-y: auto;
@@ -622,6 +699,27 @@ watch(
 .icon-title {
   font-size: 0.82rem;
   text-align: center;
+  color: hsl(var(--text-primary));
+  word-break: break-word;
+}
+
+.icon-subtitle {
+  font-size: 0.72rem;
+  color: hsl(var(--text-secondary));
+  text-align: center;
+  word-break: break-word;
+}
+
+.icon-key {
+  font-size: 0.68rem;
+  color: hsl(var(--text-muted));
+  text-align: center;
+  word-break: break-word;
+}
+
+.icon-loading.large {
+  width: 1.2rem;
+  height: 1.2rem;
 }
 
 .sources-layout {

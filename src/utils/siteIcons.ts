@@ -6,6 +6,15 @@ import {
   type SiteIconSource
 } from '@/data/siteIconSources'
 
+export interface RemoteIconSearchItem {
+  id: string
+  prefix: string
+  name: string
+  collectionName: string
+}
+
+const ICONIFY_API_BASE = 'https://api.iconify.design'
+
 const FAVICON_SERVICES = [
   (hostname: string) => `https://icon.horse/icon/${hostname}`,
   (hostname: string) => `https://favicone.com/${hostname}?s=128`
@@ -123,6 +132,54 @@ export async function downloadImageAsDataUrlOrKeepUrl(url: string) {
   } catch {
     return url
   }
+}
+
+export function buildIconifyIconUrl(iconId: string) {
+  const separatorIndex = iconId.indexOf(':')
+  if (separatorIndex <= 0 || separatorIndex >= iconId.length - 1) {
+    return ''
+  }
+
+  const prefix = iconId.slice(0, separatorIndex)
+  const name = iconId.slice(separatorIndex + 1)
+  return `${ICONIFY_API_BASE}/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`
+}
+
+export async function searchRemoteIcons(query: string, signal?: AbortSignal, limit = 48) {
+  const keyword = query.trim()
+  if (keyword.length < 2) {
+    return [] as RemoteIconSearchItem[]
+  }
+
+  const searchUrl = `${ICONIFY_API_BASE}/search?query=${encodeURIComponent(keyword)}&limit=${limit}`
+  const response = await fetch(searchUrl, { signal })
+  if (!response.ok) {
+    throw new Error(`远程图标搜索失败: ${response.status}`)
+  }
+
+  const payload = await response.json() as {
+    icons?: string[]
+    collections?: Record<string, { name?: string }>
+  }
+
+  return (payload.icons || [])
+    .map((iconId) => {
+      const separatorIndex = iconId.indexOf(':')
+      if (separatorIndex <= 0 || separatorIndex >= iconId.length - 1) {
+        return null
+      }
+
+      const prefix = iconId.slice(0, separatorIndex)
+      const name = iconId.slice(separatorIndex + 1)
+
+      return {
+        id: iconId,
+        prefix,
+        name,
+        collectionName: payload.collections?.[prefix]?.name || prefix
+      }
+    })
+    .filter((item): item is RemoteIconSearchItem => item !== null)
 }
 
 function joinUrl(baseUrl: string, path: string) {
