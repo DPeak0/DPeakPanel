@@ -218,7 +218,7 @@ function handleDragStart(event: DragEvent, site: Site) {
   dragState.value = {
     siteKey: site.key,
     sourceGroupKey: site.groupKey || '',
-    targetGroupKey: site.groupKey || '',
+    targetGroupKey: null,
     targetSiteKey: null,
     position: 'end',
     previewEnabled: false
@@ -253,7 +253,10 @@ function handleGroupDragOver(event: DragEvent, groupKey: string) {
 
 function handleSiteDragOver(event: DragEvent, site: Site) {
   if (!dragState.value) return
-  if (dragState.value.siteKey === site.key) return
+  if (dragState.value.siteKey === site.key) {
+    event.stopPropagation()
+    return
+  }
   event.preventDefault()
   event.stopPropagation()
   dragState.value.previewEnabled = true
