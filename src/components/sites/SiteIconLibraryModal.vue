@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
 import { Search, LoaderCircle, X, Plus, Pencil, Trash2, Check, FolderCog } from 'lucide-vue-next'
 import {
   DEFAULT_SITE_ICON_SOURCES,
@@ -11,7 +11,7 @@ import {
   type SiteIconSourceType
 } from '@/data/siteIconSources'
 import {
-  buildIconifyIconUrl,
+  clearTemplateSourceSearchCache,
   downloadImageAsDataUrlOrKeepUrl,
   searchRemoteIcons,
   type RemoteIconSearchItem
@@ -35,6 +35,7 @@ const sourceErrorMessage = ref('')
 const sources = ref<SiteIconSource[]>([])
 const editingSourceKey = ref<string | null>(null)
 const remoteIcons = ref<RemoteIconSearchItem[]>([])
+const selectedBrowseSourceKey = ref<'all' | string>('all')
 let searchAbortController: AbortController | null = null
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -47,12 +48,35 @@ const sourceForm = reactive({
   enabled: true
 })
 
+const enabledSources = computed(() => sources.value.filter(item => item.enabled))
+const browseSourceOptions = computed(() => [
+  { key: 'all', name: '全部' },
+  ...enabledSources.value.map(source => ({
+    key: source.key,
+    name: source.name
+  }))
+])
+const activeBrowseSources = computed(() => {
+  if (selectedBrowseSourceKey.value === 'all') {
+    return enabledSources.value
+  }
+  return enabledSources.value.filter(source => source.key === selectedBrowseSourceKey.value)
+})
+
 function loadSources() {
   sources.value = loadSiteIconSources()
+  clearTemplateSourceSearchCache()
+  if (
+    selectedBrowseSourceKey.value !== 'all' &&
+    !sources.value.some(source => source.enabled && source.key === selectedBrowseSourceKey.value)
+  ) {
+    selectedBrowseSourceKey.value = 'all'
+  }
 }
 
 function saveSources() {
   saveSiteIconSources(sources.value)
+  clearTemplateSourceSearchCache()
 }
 
 function resetSourceForm() {
@@ -156,6 +180,7 @@ function close() {
   }
   activeTab.value = 'browse'
   keyword.value = ''
+  selectedBrowseSourceKey.value = 'all'
   remoteIcons.value = []
   isSearching.value = false
   errorMessage.value = ''
@@ -164,11 +189,11 @@ function close() {
 }
 
 function getPreviewUrl(icon: RemoteIconSearchItem) {
-  return buildIconifyIconUrl(icon.id)
+  return icon.previewUrl
 }
 
 async function selectIcon(icon: RemoteIconSearchItem) {
-  const iconUrl = buildIconifyIconUrl(icon.id)
+  const iconUrl = icon.downloadUrl
   if (!iconUrl) {
     errorMessage.value = '图标地址生成失败'
     return
@@ -195,7 +220,7 @@ async function performSearch() {
     searchAbortController.abort()
   }
 
-  if (search.length < 2) {
+  if (search.length < 2 || activeBrowseSources.value.length === 0) {
     remoteIcons.value = []
     isSearching.value = false
     errorMessage.value = ''
@@ -207,7 +232,11 @@ async function performSearch() {
   errorMessage.value = ''
 
   try {
-    remoteIcons.value = await searchRemoteIcons(search, searchAbortController.signal)
+    remoteIcons.value = await searchRemoteIcons(
+      search,
+      activeBrowseSources.value,
+      searchAbortController.signal
+    )
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return
@@ -226,6 +255,7 @@ watch(
     loadSources()
     resetSourceForm()
     keyword.value = ''
+    selectedBrowseSourceKey.value = 'all'
     remoteIcons.value = []
     errorMessage.value = ''
   },
@@ -248,6 +278,15 @@ watch(activeTab, (tab) => {
   if (tab !== 'browse') return
   if (keyword.value.trim().length >= 2) {
     performSearch()
+  }
+})
+
+watch(selectedBrowseSourceKey, () => {
+  if (!props.open || activeTab.value !== 'browse') return
+  if (keyword.value.trim().length >= 2) {
+    performSearch()
+  } else {
+    remoteIcons.value = []
   }
 })
 
@@ -296,7 +335,17 @@ onBeforeUnmount(() => {
 
       <template v-if="activeTab === 'browse'">
         <div class="toolbar">
-          <div class="remote-api-badge">远程搜索 · Iconify API</div>
+          <div class="browse-source-filters">
+            <button
+              v-for="option in browseSourceOptions"
+              :key="option.key"
+              class="browse-source-btn"
+              :class="{ active: selectedBrowseSourceKey === option.key }"
+              @click="selectedBrowseSourceKey = option.key"
+            >
+              {{ option.name }}
+            </button>
+          </div>
           <button class="manage-link" @click="activeTab = 'sources'">
             <FolderCog class="icon-sm" />
             管理图标源
@@ -309,11 +358,15 @@ onBeforeUnmount(() => {
         </div>
 
         <p class="helper-text">
-          输入至少 2 个字符后，会通过 Iconify 官方 API 实时搜索图标。选中时优先下载为本地 data URL，失败时自动回退为远程地址。
+          输入至少 2 个字符后，会按当前来源筛选搜索图标。`全部` 会同时搜索所有已启用图标源，支持 Iconify 和你的私有文件浏览器源。
         </p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
 
-        <div v-if="keyword.trim().length < 2" class="empty-search-state">
+        <div v-if="activeBrowseSources.length === 0" class="empty-search-state">
+          当前没有可用的已启用图标源，请先到“管理图标源”里启用至少一个来源。
+        </div>
+
+        <div v-else-if="keyword.trim().length < 2" class="empty-search-state">
           输入关键词开始搜索，例如 `emby`、`vaultwarden`、`movie`、`nas`
         </div>
 
@@ -340,6 +393,7 @@ onBeforeUnmount(() => {
             </div>
             <span class="icon-title">{{ item.name }}</span>
             <span class="icon-subtitle">{{ item.collectionName }}</span>
+            <span class="icon-source">{{ item.sourceName }}</span>
             <span class="icon-key">{{ item.id }}</span>
           </button>
         </div>
@@ -563,16 +617,27 @@ onBeforeUnmount(() => {
   background: hsl(var(--primary) / 0.16);
 }
 
-.remote-api-badge {
-  display: inline-flex;
+.browse-source-filters {
+  display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.65rem 0.9rem;
-  border-radius: 999px;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.browse-source-btn {
   border: 1px solid hsl(var(--glass-border));
-  background: hsl(var(--primary) / 0.1);
+  background: transparent;
   color: hsl(var(--text-secondary));
-  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  border-radius: 999px;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.browse-source-btn.active {
+  background: hsl(var(--primary) / 0.16);
+  border-color: hsl(var(--primary) / 0.34);
+  color: hsl(var(--text-primary));
 }
 
 .source-select-wrap,
@@ -706,6 +771,13 @@ onBeforeUnmount(() => {
 .icon-subtitle {
   font-size: 0.72rem;
   color: hsl(var(--text-secondary));
+  text-align: center;
+  word-break: break-word;
+}
+
+.icon-source {
+  font-size: 0.7rem;
+  color: hsl(var(--primary));
   text-align: center;
   word-break: break-word;
 }
