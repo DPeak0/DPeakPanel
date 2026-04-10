@@ -243,6 +243,7 @@ function handleDragEnd() {
 
 function handleGroupDragOver(event: DragEvent, groupKey: string) {
   if (!dragState.value) return
+  if (event.target !== event.currentTarget) return
   event.preventDefault()
   dragState.value.previewEnabled = true
   dragState.value.targetGroupKey = groupKey
@@ -254,6 +255,7 @@ function handleSiteDragOver(event: DragEvent, site: Site) {
   if (!dragState.value) return
   if (dragState.value.siteKey === site.key) return
   event.preventDefault()
+  event.stopPropagation()
   dragState.value.previewEnabled = true
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
@@ -275,6 +277,11 @@ function handleDrop() {
   )
 
   dragState.value = null
+}
+
+function handleCardDrop(event: DragEvent) {
+  event.stopPropagation()
+  handleDrop()
 }
 
 function isDropTarget(groupKey: string, siteKey?: string) {
@@ -406,7 +413,7 @@ onBeforeUnmount(() => {
             @dragstart="handleDragStart($event, entry.site)"
             @dragend="handleDragEnd"
             @dragover="handleSiteDragOver($event, entry.site)"
-            @drop.prevent="handleDrop"
+            @drop.prevent="handleCardDrop"
           >
             <SiteCard
               :site="entry.site"
@@ -447,7 +454,7 @@ onBeforeUnmount(() => {
           @dragstart="handleDragStart($event, entry.site)"
           @dragend="handleDragEnd"
           @dragover="handleSiteDragOver($event, entry.site)"
-          @drop.prevent="handleDrop"
+          @drop.prevent="handleCardDrop"
         >
           <SiteCard
             :site="entry.site"
