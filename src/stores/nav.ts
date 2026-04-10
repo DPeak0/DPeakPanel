@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useConfigStore } from './config'
+import { useAuthStore } from './auth'
 import type {
   NavConfig,
   SitesData,
@@ -169,6 +170,8 @@ function inferNetworkTypeFromHostname(hostname: string): NetworkType | null {
 }
 
 export const useNavStore = defineStore('nav', () => {
+  const authStore = useAuthStore()
+
   // 加载状态
   const isLoading = ref(true)
   const loadError = ref<string | null>(null)
@@ -197,6 +200,10 @@ export const useNavStore = defineStore('nav', () => {
     return sitesData.value?.groups || []
   })
 
+  const visibleSiteGroups = computed<Group[]>(() => {
+    return siteGroups.value.filter(group => authStore.canAccessGroup('sites', group.key))
+  })
+
   const editableSites = computed<Site[]>(() => {
     const sites = sitesData.value?.sites || []
     return [...sites].sort((a, b) => {
@@ -212,15 +219,29 @@ export const useNavStore = defineStore('nav', () => {
     return sites.filter((s: Site) => s.enable !== false).sort((a: Site, b: Site) => (a.order || 0) - (b.order || 0))
   })
 
+  const visibleSites = computed<Site[]>(() => {
+    const allowedGroupKeys = new Set(visibleSiteGroups.value.map(group => group.key))
+    return allSites.value.filter(site => site.groupKey && allowedGroupKeys.has(site.groupKey))
+  })
+
   // 计算属性：Docker 分组
   const dockerGroups = computed<Group[]>(() => {
     return dockerData.value?.groups || []
+  })
+
+  const visibleDockerGroups = computed<Group[]>(() => {
+    return dockerGroups.value.filter(group => authStore.canAccessGroup('docker', group.key))
   })
 
   // 计算属性：所有 Docker 容器
   const allContainers = computed<DockerContainer[]>(() => {
     const containers = dockerData.value?.containers || []
     return containers.filter((c: DockerContainer) => c.enable !== false).sort((a: DockerContainer, b: DockerContainer) => (a.order || 0) - (b.order || 0))
+  })
+
+  const visibleContainers = computed<DockerContainer[]>(() => {
+    const allowedGroupKeys = new Set(visibleDockerGroups.value.map(group => group.key))
+    return allContainers.value.filter(container => container.groupKey && allowedGroupKeys.has(container.groupKey))
   })
 
   // 计算属性：面板标题
@@ -707,10 +728,14 @@ export const useNavStore = defineStore('nav', () => {
 
     // 计算属性
     siteGroups,
+    visibleSiteGroups,
     editableSites,
     allSites,
+    visibleSites,
     dockerGroups,
+    visibleDockerGroups,
     allContainers,
+    visibleContainers,
     panelTitle,
     panelSubtitle,
     panelLogo,

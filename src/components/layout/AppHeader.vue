@@ -2,12 +2,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useConfigStore } from '@/stores/config'
 import { useNavStore } from '@/stores/nav'
-import { Settings, Moon, Sun, Pencil, Clock, Zap, ChevronDown, Check } from 'lucide-vue-next'
+import { useAuthStore } from '@/stores/auth'
+import { Settings, Moon, Sun, Pencil, Clock, Zap, ChevronDown, Check, LogIn, UserRound } from 'lucide-vue-next'
 import { useResolvedIconUrl } from '@/utils/siteIcons'
 import type { ThemeMode } from '@/types'
 
 const configStore = useConfigStore()
 const navStore = useNavStore()
+const authStore = useAuthStore()
 
 const title = computed(() => navStore.panelTitle)
 const subtitle = computed(() => navStore.panelSubtitle)
@@ -89,6 +91,17 @@ const logoUrl = useResolvedIconUrl(() => logo.value)
 
 function openSettings() {
   configStore.toggleSettingsPanel(true)
+}
+
+const authButtonTitle = computed(() => {
+  if (!authStore.isLoggedIn) return '登录'
+  return authStore.currentUser?.username || '账户'
+})
+
+const authButtonIcon = computed(() => authStore.isLoggedIn ? UserRound : LogIn)
+
+function openAuthDialog() {
+  authStore.toggleAuthDialog(true)
 }
 </script>
 
@@ -196,8 +209,14 @@ function openSettings() {
           </Transition>
         </div>
 
+        <button class="action-btn auth-btn" @click="openAuthDialog" :title="authButtonTitle">
+          <div class="btn-inner">
+            <component :is="authButtonIcon" class="btn-icon" />
+          </div>
+        </button>
+
         <!-- 设置按钮 -->
-        <button class="action-btn settings-btn" @click="openSettings" title="设置">
+        <button v-if="authStore.isAdmin" class="action-btn settings-btn" @click="openSettings" title="设置">
           <div class="btn-inner">
             <Settings class="btn-icon settings-icon" />
           </div>

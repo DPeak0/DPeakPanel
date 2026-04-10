@@ -29,6 +29,36 @@ export interface Group {
   count?: number
 }
 
+// ============ 认证类型 ============
+
+export type AuthRole = 'admin' | 'user'
+
+export interface UserGroupPermissions {
+  sites: string[]
+  docker: string[]
+}
+
+export interface AuthUser {
+  id: string
+  username: string
+  password: string
+  role: AuthRole
+  permissions: UserGroupPermissions
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AuthSession {
+  userId: string
+  username: string
+  role: AuthRole
+  loginAt: string
+}
+
+export interface AuthSettings {
+  requireLogin: boolean
+}
+
 // ============ 站点类型 ============
 
 /** 站点数据响应 */

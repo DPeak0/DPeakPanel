@@ -2,6 +2,7 @@
 import { onMounted, computed, watch, ref, provide } from 'vue'
 import { useNavStore } from '@/stores/nav'
 import { useConfigStore } from '@/stores/config'
+import { useAuthStore } from '@/stores/auth'
 import type { TabType } from '@/types'
 import TechBackground from '@/components/common/TechBackground.vue'
 import LoadingScreen from '@/components/common/LoadingScreen.vue'
@@ -10,14 +11,16 @@ import ContentTabs from '@/components/common/ContentTabs.vue'
 import SiteGrid from '@/components/sites/SiteGrid.vue'
 import DockerGrid from '@/components/docker/DockerGrid.vue'
 import SettingsPanel from '@/components/settings/SettingsPanel.vue'
+import AuthDialog from '@/components/auth/AuthDialog.vue'
 import BackToTop from '@/components/common/BackToTop.vue'
 import LinkDropdown from '@/components/common/LinkDropdown.vue'
 import SearchBar from '@/components/common/SearchBar.vue'
-import { Settings } from 'lucide-vue-next'
+import { Settings, LogIn, UserRound } from 'lucide-vue-next'
 import { resolveIconUrl } from '@/utils/siteIcons'
 
 const navStore = useNavStore()
 const configStore = useConfigStore()
+const authStore = useAuthStore()
 
 const EMPTY_STATE_CONFIG = {
   icon: '🗂️',
@@ -38,10 +41,11 @@ provide('linkDropdown', {
 // 计算属性
 const isLoading = computed(() => navStore.isLoading)
 const currentTab = computed(() => configStore.currentTab)
+const shouldBlockContent = computed(() => authStore.shouldBlockContent)
 
 // 各标签页是否可见
-const hasSites = computed(() => navStore.sitesEnabled)
-const hasDocker = computed(() => navStore.dockerEnabled && navStore.allContainers.length > 0)
+const hasSites = computed(() => navStore.sitesEnabled && navStore.visibleSites.length > 0)
+const hasDocker = computed(() => navStore.dockerEnabled && navStore.visibleContainers.length > 0)
 const showHeader = computed(() => configStore.showHeader)
 const availableTabs = computed<TabType[]>(() => {
   const tabs: TabType[] = []
@@ -125,6 +129,7 @@ onMounted(async () => {
 
   // 先加载本地配置（包含默认值）
   configStore.loadConfig()
+  authStore.loadAuthState()
 
   try {
     // 加载基础配置（nav.json）和服务器配置
@@ -166,6 +171,12 @@ onMounted(async () => {
 watch(availableTabs, () => {
   ensureValidTab()
 })
+
+const floatingAuthIcon = computed(() => authStore.isLoggedIn ? UserRound : LogIn)
+
+function openAuthDialog() {
+  authStore.toggleAuthDialog(true)
+}
 </script>
 
 <template>
@@ -194,22 +205,34 @@ watch(availableTabs, () => {
   <!-- 主内容 -->
   <div v-else class="app-main">
     <!-- 页头 -->
-    <AppHeader v-if="showHeader" />
+    <AppHeader v-if="showHeader && !shouldBlockContent" />
 
-    <!-- 浮动设置按钮（仅在隐藏页头时显示） -->
-    <button 
-      v-if="!showHeader" 
-      class="floating-settings-btn"
-      @click="configStore.toggleSettingsPanel(true)"
-    >
-      <Settings class="floating-settings-icon" />
-    </button>
+    <!-- 浮动操作按钮（仅在隐藏页头且未阻止内容时显示） -->
+    <div v-if="!showHeader && !shouldBlockContent" class="floating-actions">
+      <button class="floating-settings-btn" @click="openAuthDialog">
+        <component :is="floatingAuthIcon" class="floating-settings-icon" />
+      </button>
+      <button
+        v-if="authStore.isAdmin"
+        class="floating-settings-btn"
+        @click="configStore.toggleSettingsPanel(true)"
+      >
+        <Settings class="floating-settings-icon" />
+      </button>
+    </div>
 
     <!-- 搜索栏（仅在站点页面显示） -->
-    <SearchBar v-if="configStore.showSearch && currentTab === 'sites' && hasSites" />
+    <SearchBar v-if="!shouldBlockContent && configStore.showSearch && currentTab === 'sites' && hasSites" />
 
     <!-- 主区域 -->
-    <main class="main-content" :class="{ 'no-header': !showHeader }">
+    <main class="main-content" :class="{ 'no-header': !showHeader, blocked: shouldBlockContent }">
+      <div v-if="shouldBlockContent" class="auth-blocked-state">
+        <div class="global-empty-icon">🔐</div>
+        <h2 class="global-empty-title">需要登录后访问</h2>
+        <p class="global-empty-description">管理员已开启访问认证，请先登录后查看面板内容。</p>
+      </div>
+
+      <template v-else>
       <!-- 内容标签页 -->
       <ContentTabs class="mb-16" />
 
@@ -224,13 +247,15 @@ watch(availableTabs, () => {
         <h2 class="global-empty-title">{{ EMPTY_STATE_CONFIG.title }}</h2>
         <p class="global-empty-description">{{ EMPTY_STATE_CONFIG.description }}</p>
       </div>
+      </template>
     </main>
 
     <!-- 设置面板 -->
     <SettingsPanel />
+    <AuthDialog />
 
     <!-- 返回顶部 -->
-    <BackToTop />
+    <BackToTop v-if="!shouldBlockContent" />
 
     <!-- 链接选择下拉菜单 -->
     <LinkDropdown ref="linkDropdownRef" />
@@ -255,6 +280,12 @@ watch(availableTabs, () => {
 
 .main-content.no-header {
   padding-top: 1rem;
+}
+
+.main-content.blocked {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .global-empty-state {
@@ -300,6 +331,26 @@ watch(availableTabs, () => {
   line-height: 1.6;
 }
 
+.auth-blocked-state {
+  min-height: min(52vh, 440px);
+  width: min(100%, 38rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  border: 1px solid hsl(var(--glass-border));
+  border-radius: 1.5rem;
+  background: hsl(var(--glass-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 @media (min-width: 640px) {
   .main-content {
     padding: 0.75rem 1.5rem 2.5rem;
@@ -321,14 +372,31 @@ watch(availableTabs, () => {
     padding: 1.5rem 1rem;
     border-radius: 1.25rem;
   }
+
+  .auth-blocked-state {
+    min-height: 44vh;
+    padding: 1.5rem 1rem;
+    border-radius: 1.25rem;
+  }
+
+  .floating-actions {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
 }
 
 /* 浮动设置按钮 */
-.floating-settings-btn {
+.floating-actions {
   position: fixed;
   top: 1rem;
   right: 1rem;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.floating-settings-btn {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 0.75rem;

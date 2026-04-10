@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { VueDraggable } from 'vue-draggable-plus'
 import { useNavStore } from '@/stores/nav'
 import { useConfigStore } from '@/stores/config'
+import { useAuthStore } from '@/stores/auth'
 import SiteCard from './SiteCard.vue'
 import SiteEditorPanel from './SiteEditorPanel.vue'
 import SearchBox from '@/components/common/SearchBox.vue'
@@ -24,6 +25,7 @@ type SortEventLike = {
 
 const navStore = useNavStore()
 const configStore = useConfigStore()
+const authStore = useAuthStore()
 const { searchKeywords } = storeToRefs(configStore)
 
 const editMode = ref(false)
@@ -63,7 +65,7 @@ function matchSearch(site: Site, keyword: string): boolean {
 }
 
 const filteredSites = computed(() => {
-  let sites = navStore.allSites
+  let sites = navStore.visibleSites
   const selectedGroups = configStore.currentGroupArray
 
   if (selectedGroups.length > 0) {
@@ -80,12 +82,12 @@ const filteredSites = computed(() => {
 
 const groupedSites = computed(() => {
   const result: DraggableGroup[] = []
-  const allSites = navStore.allSites
+  const allSites = navStore.visibleSites
   const kw = searchKeyword.value
   const selectedGroups = configStore.currentGroupArray
   const groupsToShow = selectedGroups.length > 0
-    ? navStore.siteGroups.filter((group: Group) => selectedGroups.includes(group.key))
-    : navStore.siteGroups
+    ? navStore.visibleSiteGroups.filter((group: Group) => selectedGroups.includes(group.key))
+    : navStore.visibleSiteGroups
 
   for (const group of groupsToShow) {
     let sites = allSites.filter((site: Site) => site.groupKey === group.key)
@@ -103,8 +105,8 @@ const groupedSites = computed(() => {
 })
 
 const groups = computed(() => {
-  const allSites = navStore.allSites
-  const groupsWithCount = navStore.siteGroups
+  const allSites = navStore.visibleSites
+  const groupsWithCount = navStore.visibleSiteGroups
     .map((group: Group) => {
       const count = allSites.filter((site: Site) => site.groupKey === group.key).length
       return { ...group, count }
@@ -143,7 +145,8 @@ const gridClass = computed(() => {
 })
 
 const showGroupedView = computed(() => configStore.isAllSelected || configStore.currentGroupArray.length > 1)
-const canSortSites = computed(() => editMode.value && searchKeyword.value.trim().length === 0)
+const canEditSites = computed(() => authStore.isAdmin)
+const canSortSites = computed(() => canEditSites.value && editMode.value && searchKeyword.value.trim().length === 0)
 const emptyStateText = computed(() => searchKeyword.value.trim() ? '未找到匹配的站点' : '暂无站点')
 const sortGroupOptions = computed(() => ({
   name: 'site-cards',
@@ -184,6 +187,7 @@ function closeSiteEditor() {
 }
 
 function toggleEditMode() {
+  if (!canEditSites.value) return
   editMode.value = !editMode.value
   if (!editMode.value) {
     isSorting.value = false
@@ -194,11 +198,12 @@ function toggleEditMode() {
 }
 
 function openCreateSiteEditor() {
+  if (!canEditSites.value) return
   openSiteEditor()
 }
 
 function handleSiteCardEdit(site: Site) {
-  if (!editMode.value) return
+  if (!canEditSites.value || !editMode.value) return
   openSiteEditor(site.key)
 }
 
@@ -253,12 +258,12 @@ function handleSortEnd() {
         color="cyan"
       />
       <div class="filter-bar-right">
-        <button class="site-editor-btn" :class="{ active: editMode }" @click="toggleEditMode">
+        <button v-if="canEditSites" class="site-editor-btn" :class="{ active: editMode }" @click="toggleEditMode">
           <Check v-if="editMode" class="toolbar-icon" />
           <Pencil class="toolbar-icon" />
           {{ editMode ? '完成编辑' : '编辑' }}
         </button>
-        <button v-if="editMode" class="site-editor-btn secondary" @click="openCreateSiteEditor">
+        <button v-if="canEditSites && editMode" class="site-editor-btn secondary" @click="openCreateSiteEditor">
           <Plus class="toolbar-icon" />
           新增站点
         </button>
@@ -304,12 +309,12 @@ function handleSortEnd() {
             v-for="site in item.sites"
             :key="site.key"
             class="site-card-wrap"
-            :class="{ editable: editMode, 'is-dragging': draggingSiteKey === site.key }"
+            :class="{ editable: canEditSites && editMode, 'is-dragging': draggingSiteKey === site.key }"
             :data-site-key="site.key"
           >
             <SiteCard
               :site="site"
-              :editable="editMode"
+              :editable="canEditSites && editMode"
               @edit="handleSiteCardEdit(site)"
             />
           </div>
@@ -346,12 +351,12 @@ function handleSortEnd() {
           v-for="site in draggableSingleSites"
           :key="site.key"
           class="site-card-wrap"
-          :class="{ editable: editMode, 'is-dragging': draggingSiteKey === site.key }"
+          :class="{ editable: canEditSites && editMode, 'is-dragging': draggingSiteKey === site.key }"
           :data-site-key="site.key"
         >
           <SiteCard
             :site="site"
-            :editable="editMode"
+            :editable="canEditSites && editMode"
             @edit="handleSiteCardEdit(site)"
           />
         </div>
@@ -366,7 +371,7 @@ function handleSortEnd() {
     </template>
 
     <SiteEditorPanel
-      :open="siteEditorOpen"
+      :open="canEditSites && siteEditorOpen"
       :site-key="editingSiteKey"
       :create-mode="editorCreateMode"
       @close="closeSiteEditor"

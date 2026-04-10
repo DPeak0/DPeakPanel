@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useConfigStore, PRESET_BACKGROUNDS } from '@/stores/config'
-import { X, Sun, Moon, Pencil, RotateCcw, Palette, Eye, Check, Image, Github, Search, Globe } from 'lucide-vue-next'
-import type { ThemeMode } from '@/types'
+import { useNavStore } from '@/stores/nav'
+import { useAuthStore } from '@/stores/auth'
+import { X, Sun, Moon, Pencil, RotateCcw, Palette, Eye, Check, Image, Github, Search, Globe, ShieldCheck, UserCog, UserRound, Plus, Save, Trash2, LockKeyhole } from 'lucide-vue-next'
+import type { AuthRole, ThemeMode, UserGroupPermissions } from '@/types'
 
 // 导入本地图标
 import iconBing from '@/assets/icons/bing.png'
@@ -13,8 +15,10 @@ import icon360 from '@/assets/icons/so.ico'
 import iconGithub from '@/assets/icons/github.ico'
 
 const configStore = useConfigStore()
+const navStore = useNavStore()
+const authStore = useAuthStore()
 
-const isOpen = computed(() => configStore.settingsPanelOpen)
+const isOpen = computed(() => configStore.settingsPanelOpen && authStore.canManageSettings)
 
 // 服务器背景图片
 const serverBackgrounds = computed(() => configStore.serverBackgrounds)
@@ -48,11 +52,112 @@ const SEARCH_ENGINES = [
 
 // 自定义搜索 URL 输入
 const customSearchUrlInput = ref(configStore.customSearchUrl)
+const authErrorMessage = ref('')
+const editingUserId = ref<string | null>(null)
+
+const userForm = reactive<{
+  username: string
+  password: string
+  role: AuthRole
+  permissions: UserGroupPermissions
+}>({
+  username: '',
+  password: '',
+  role: 'user',
+  permissions: {
+    sites: [],
+    docker: []
+  }
+})
+
+const sitePermissionGroups = computed(() => navStore.siteGroups)
+const dockerPermissionGroups = computed(() => navStore.dockerGroups)
+const managedUsers = computed(() => authStore.users)
 
 // 保存自定义搜索 URL
 function saveCustomSearchUrl() {
   configStore.setCustomSearchUrl(customSearchUrlInput.value)
 }
+
+function resetUserForm() {
+  editingUserId.value = null
+  authErrorMessage.value = ''
+  Object.assign(userForm, {
+    username: '',
+    password: '',
+    role: 'user' as AuthRole,
+    permissions: {
+      sites: [],
+      docker: []
+    }
+  })
+}
+
+function editUser(userId: string) {
+  const user = authStore.users.find(item => item.id === userId)
+  if (!user) return
+
+  editingUserId.value = user.id
+  authErrorMessage.value = ''
+  Object.assign(userForm, {
+    username: user.username,
+    password: '',
+    role: user.role,
+    permissions: {
+      sites: [...user.permissions.sites],
+      docker: [...user.permissions.docker]
+    }
+  })
+}
+
+function togglePermission(tab: keyof UserGroupPermissions, groupKey: string) {
+  const current = userForm.permissions[tab]
+  if (current.includes(groupKey)) {
+    userForm.permissions[tab] = current.filter(item => item !== groupKey)
+    return
+  }
+
+  userForm.permissions[tab] = [...current, groupKey]
+}
+
+function saveUser() {
+  authErrorMessage.value = ''
+
+  try {
+    authStore.upsertUser({
+      id: editingUserId.value || undefined,
+      username: userForm.username,
+      password: userForm.password,
+      role: userForm.role,
+      permissions: userForm.permissions
+    })
+    resetUserForm()
+  } catch (error) {
+    authErrorMessage.value = error instanceof Error ? error.message : '用户保存失败'
+  }
+}
+
+function removeUser(userId: string, username: string) {
+  authErrorMessage.value = ''
+  if (!window.confirm(`确认删除用户“${username}”吗？`)) {
+    return
+  }
+
+  try {
+    authStore.deleteUser(userId)
+    if (editingUserId.value === userId) {
+      resetUserForm()
+    }
+  } catch (error) {
+    authErrorMessage.value = error instanceof Error ? error.message : '删除用户失败'
+  }
+}
+
+watch(() => authStore.canManageSettings, (allowed) => {
+  if (!allowed) {
+    configStore.toggleSettingsPanel(false)
+  }
+})
 
 </script>
 
@@ -289,6 +394,133 @@ function saveCustomSearchUrl() {
               </div>
             </div>
           </template>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-header">
+            <ShieldCheck class="section-icon green" />
+            <h3 class="section-title">访问认证</h3>
+          </div>
+
+          <div class="toggle-options">
+            <label class="toggle-item">
+              <span class="toggle-label">必须登录后查看页面</span>
+              <div
+                class="switch-modern"
+                :class="{ active: authStore.settings.requireLogin }"
+                @click="authStore.setRequireLogin(!authStore.settings.requireLogin)"
+              />
+            </label>
+          </div>
+
+          <p class="toggle-hint">
+            设置图标仅管理员可见。普通用户登录后只会看到自己被授权的站点分组和 Docker 分组。
+          </p>
+
+          <div class="auth-users-panel">
+            <div class="section-header sub-header">
+              <UserCog class="section-icon cyan" />
+              <h4 class="section-subtitle">用户管理</h4>
+            </div>
+
+            <div class="user-list">
+              <div
+                v-for="user in managedUsers"
+                :key="user.id"
+                class="user-card"
+                :class="{ active: editingUserId === user.id }"
+              >
+                <button class="user-card-main" @click="editUser(user.id)">
+                  <div class="user-avatar">
+                    <UserRound class="small-icon" />
+                  </div>
+                  <div class="user-meta">
+                    <strong>{{ user.username }}</strong>
+                    <span>{{ user.role === 'admin' ? '管理员' : '普通用户' }}</span>
+                  </div>
+                </button>
+                <button class="user-delete-btn" @click="removeUser(user.id, user.username)">
+                  <Trash2 class="small-icon" />
+                </button>
+              </div>
+            </div>
+
+            <div class="user-editor">
+              <div class="user-editor-header">
+                <div class="section-header sub-header">
+                  <LockKeyhole class="section-icon purple" />
+                  <h4 class="section-subtitle">{{ editingUserId ? '编辑用户' : '新增用户' }}</h4>
+                </div>
+                <button class="mini-action-btn" @click="resetUserForm">
+                  <Plus class="small-icon" />
+                  新建
+                </button>
+              </div>
+
+              <label class="settings-field">
+                <span class="field-title">用户名</span>
+                <input v-model.trim="userForm.username" class="url-input" type="text" placeholder="例如：viewer" />
+              </label>
+
+              <label class="settings-field">
+                <span class="field-title">{{ editingUserId ? '密码（留空则不修改）' : '密码' }}</span>
+                <input v-model="userForm.password" class="url-input" type="password" placeholder="请输入密码" />
+              </label>
+
+              <label class="settings-field">
+                <span class="field-title">角色</span>
+                <select v-model="userForm.role" class="url-input">
+                  <option value="user">普通用户</option>
+                  <option value="admin">管理员</option>
+                </select>
+              </label>
+
+              <template v-if="userForm.role === 'user'">
+                <div class="settings-field">
+                  <span class="field-title">可查看站点分组</span>
+                  <div class="permission-grid">
+                    <button
+                      v-for="group in sitePermissionGroups"
+                      :key="group.key"
+                      class="permission-chip"
+                      :class="{ active: userForm.permissions.sites.includes(group.key) }"
+                      @click="togglePermission('sites', group.key)"
+                    >
+                      {{ group.name }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="settings-field">
+                  <span class="field-title">可查看 Docker 分组</span>
+                  <div class="permission-grid">
+                    <button
+                      v-for="group in dockerPermissionGroups"
+                      :key="group.key"
+                      class="permission-chip"
+                      :class="{ active: userForm.permissions.docker.includes(group.key) }"
+                      @click="togglePermission('docker', group.key)"
+                    >
+                      {{ group.name }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <p v-else class="toggle-hint">
+                管理员默认拥有所有分组权限，并可看到设置入口。
+              </p>
+
+              <p v-if="authErrorMessage" class="auth-error">{{ authErrorMessage }}</p>
+
+              <div class="user-actions">
+                <button class="save-user-btn" @click="saveUser">
+                  <Save class="small-icon" />
+                  保存用户
+                </button>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -743,6 +975,167 @@ function saveCustomSearchUrl() {
   margin-top: 0.375rem;
   font-size: 0.6875rem;
   color: hsl(var(--text-muted));
+}
+
+.auth-users-panel,
+.user-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-users-panel {
+  gap: 0.9rem;
+}
+
+.user-list,
+.permission-grid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.user-list {
+  grid-template-columns: 1fr;
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.user-card-main,
+.user-delete-btn,
+.mini-action-btn,
+.permission-chip,
+.save-user-btn {
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg));
+  color: hsl(var(--text-primary));
+  transition: all 200ms;
+}
+
+.user-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.875rem;
+}
+
+.user-card.active .user-card-main {
+  border-color: hsl(var(--neon-cyan) / 0.45);
+  background: hsl(var(--neon-cyan) / 0.1);
+}
+
+.user-delete-btn,
+.mini-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.72rem 0.8rem;
+  border-radius: 0.875rem;
+}
+
+.user-delete-btn {
+  color: hsl(var(--error));
+}
+
+.user-avatar {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.75rem;
+  display: grid;
+  place-items: center;
+  background: hsl(var(--glass-bg-hover));
+  color: hsl(var(--neon-cyan));
+  flex-shrink: 0;
+}
+
+.user-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.user-meta strong,
+.field-title {
+  color: hsl(var(--text-primary));
+}
+
+.user-meta span,
+.field-title {
+  font-size: 0.75rem;
+}
+
+.user-meta span {
+  color: hsl(var(--text-muted));
+}
+
+.user-editor {
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--glass-border));
+  background: hsl(var(--glass-bg));
+}
+
+.user-editor-header,
+.user-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.permission-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.permission-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.8rem;
+  font-size: 0.75rem;
+}
+
+.permission-chip.active {
+  border-color: hsl(var(--neon-cyan) / 0.45);
+  background: hsl(var(--neon-cyan) / 0.12);
+  color: hsl(var(--neon-cyan));
+}
+
+.save-user-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.875rem;
+  background: hsl(var(--primary) / 0.16);
+}
+
+.auth-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: hsl(var(--error));
+}
+
+.small-icon {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 /* 图标颜色 */

@@ -35,7 +35,7 @@ function matchSearch(container: DockerContainer, keyword: string): boolean {
 
 // 筛选后的容器列表（用于多选分组模式）
 const filteredContainers = computed(() => {
-  let containers = navStore.allContainers
+  let containers = navStore.visibleContainers
   
   // 按分组筛选（支持多选）
   const selectedGroups = configStore.currentGroupArray
@@ -55,14 +55,14 @@ const filteredContainers = computed(() => {
 // 按分组组织的容器（用于全部模式或多选分组模式）
 const groupedContainers = computed(() => {
   const result: { group: Group; containers: DockerContainer[] }[] = []
-  const allContainers = navStore.allContainers
+  const allContainers = navStore.visibleContainers
   const kw = searchKeyword.value
   const selectedGroups = configStore.currentGroupArray
   
   // 确定要显示的分组
   const groupsToShow = selectedGroups.length > 0
-    ? navStore.dockerGroups.filter((g: Group) => selectedGroups.includes(g.key))
-    : navStore.dockerGroups
+    ? navStore.visibleDockerGroups.filter((g: Group) => selectedGroups.includes(g.key))
+    : navStore.visibleDockerGroups
   
   for (const group of groupsToShow) {
     let containers = allContainers.filter((c: DockerContainer) => c.groupKey === group.key)
@@ -80,8 +80,8 @@ const groupedContainers = computed(() => {
 
 // 分组列表（只显示有容器的分组，并统计数量）
 const groups = computed(() => {
-  const allContainers = navStore.allContainers
-  const groupsWithCount = navStore.dockerGroups
+  const allContainers = navStore.visibleContainers
+  const groupsWithCount = navStore.visibleDockerGroups
     .map((g: Group) => {
       const count = allContainers.filter((c: DockerContainer) => c.groupKey === g.key).length
       return { ...g, count }
@@ -207,7 +207,7 @@ watch(
 )
 
 watch(
-  () => navStore.allContainers,
+  () => navStore.visibleContainers,
   () => {
     if (configStore.dockerLayout === 'list') {
       setTimeout(calcListMaxWidths, 100)
