@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useConfigStore } from '@/stores/config'
 import { useNavStore } from '@/stores/nav'
 import { Settings, Moon, Sun, Pencil, Clock, Zap, ChevronDown, Check } from 'lucide-vue-next'
+import { useResolvedIconUrl } from '@/utils/siteIcons'
 import type { ThemeMode } from '@/types'
 
 const configStore = useConfigStore()
@@ -84,16 +85,7 @@ const currentDate = computed(() => {
 })
 
 // 拼接后的 Logo URL
-const logoUrl = computed(() => {
-  const logoPath = logo.value
-  if (!logoPath) return null
-  
-  if (logoPath.startsWith('http://') || logoPath.startsWith('https://')) {
-    return logoPath
-  }
-  
-  return `./backend/iconlibs/${logoPath}`
-})
+const logoUrl = useResolvedIconUrl(() => logo.value)
 
 function openSettings() {
   configStore.toggleSettingsPanel(true)

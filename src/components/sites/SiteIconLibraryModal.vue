@@ -276,7 +276,7 @@ watch(
         </div>
 
         <p v-if="selectedSource" class="helper-text">
-          当前图标源：{{ selectedSource.name }}。选择时优先下载为本地 data URL，失败时自动回退为远程地址。
+          当前图标源：{{ selectedSource.name }}。选择时优先下载为本地 data URL，失败时自动回退为远程地址。通用模板支持 `{path}`，会同时作为旧图标路径的远程资源根地址。
         </p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
 
@@ -364,11 +364,13 @@ watch(
                 v-model.trim="sourceForm.urlTemplate"
                 class="field-input"
                 type="text"
-                placeholder="支持 {slug} / {key} / {title}，也可直接填写基础 URL"
+                placeholder="支持 {slug} / {key} / {title} / {path}，也可直接填写基础 URL"
               />
             </label>
 
-            <p class="helper-text">示例：https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/{slug}.svg</p>
+            <p class="helper-text">
+              示例：`https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/{slug}.svg` 或 `https://icons.example.com/{path}`。模板类型直接填基础 URL 时，会自动补成 `{path}`。
+            </p>
 
             <label class="field">
               <span class="field-label">描述</span>

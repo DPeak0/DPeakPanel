@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useNavStore } from '@/stores/nav'
 import { useConfigStore } from '@/stores/config'
 import { Cpu, MemoryStick, ArrowDownToLine, ArrowUpFromLine, Activity, Box, Zap } from 'lucide-vue-next'
+import { useResolvedIconUrl } from '@/utils/siteIcons'
 import type { DockerContainer } from '@/types'
 
 const props = defineProps<{
@@ -161,16 +162,7 @@ const displayName = computed(() => {
 })
 
 // 图标 URL 处理（支持完整链接和本地路径）
-const iconUrl = computed(() => {
-  if (!props.container.iconUrl) return null
-  const url = props.container.iconUrl
-  // 如果是完整链接（http:// 或 https://），直接使用
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url
-  }
-  // 否则拼接本地 iconlibs 路径
-  return `./backend/iconlibs/${url}`
-})
+const iconUrl = useResolvedIconUrl(() => props.container.iconUrl)
 
 // CPU 百分比数值
 const cpuValue = computed(() => {

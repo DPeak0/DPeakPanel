@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
 import { useNavStore } from '@/stores/nav'
 import { ArrowUpRight, Pencil } from 'lucide-vue-next'
+import { useResolvedIconUrl } from '@/utils/siteIcons'
 import type { Site } from '@/types'
 
 interface LinkItem {
@@ -220,20 +221,7 @@ const ariaLabel = computed(() => {
 // const bestUrl = computed(() => getBestUrl())
 
 // 图标 URL
-const iconUrl = computed(() => {
-  const { iconUrl } = props.site
-  if (!iconUrl) return null
-
-  if (
-    iconUrl.startsWith('http://') ||
-    iconUrl.startsWith('https://') ||
-    iconUrl.startsWith('data:')
-  ) {
-    return iconUrl
-  }
-
-  return `./backend/iconlibs/${iconUrl}`
-})
+const iconUrl = useResolvedIconUrl(() => props.site.iconUrl)
 
 // 图标加载状态
 const iconLoading = ref(true)

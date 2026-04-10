@@ -10,6 +10,7 @@ export interface SiteIconSource {
 }
 
 const STORAGE_KEY = 'lightpanel_site_icon_sources'
+export const SITE_ICON_SOURCES_UPDATED_EVENT = 'lightpanel:site-icon-sources-updated'
 
 export const DEFAULT_SITE_ICON_SOURCES: SiteIconSource[] = [
   {
@@ -35,7 +36,7 @@ function normalizeUrlTemplate(value: string, type: SiteIconSourceType) {
   const template = value.trim()
   if (!template) return ''
 
-  if (template.includes('{slug}') || template.includes('{key}') || template.includes('{title}')) {
+  if (template.includes('{slug}') || template.includes('{key}') || template.includes('{title}') || template.includes('{path}')) {
     return template
   }
 
@@ -43,7 +44,7 @@ function normalizeUrlTemplate(value: string, type: SiteIconSourceType) {
     return `${template.replace(/\/+$/, '')}/{slug}.svg`
   }
 
-  return `${template.replace(/\/+$/, '')}/{slug}`
+  return `${template.replace(/\/+$/, '')}/{path}`
 }
 
 function normalizeSource(source: Partial<SiteIconSource>): SiteIconSource | null {
@@ -108,4 +109,7 @@ export function loadSiteIconSources() {
 
 export function saveSiteIconSources(sources: SiteIconSource[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sources))
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SITE_ICON_SOURCES_UPDATED_EVENT))
+  }
 }

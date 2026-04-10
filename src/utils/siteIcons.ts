@@ -1,5 +1,10 @@
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { SiteIconLibraryItem } from '@/data/siteIconLibrary'
-import type { SiteIconSource } from '@/data/siteIconSources'
+import {
+  SITE_ICON_SOURCES_UPDATED_EVENT,
+  loadSiteIconSources,
+  type SiteIconSource
+} from '@/data/siteIconSources'
 
 const FAVICON_SERVICES = [
   (hostname: string) => `https://icon.horse/icon/${hostname}`,
@@ -100,7 +105,8 @@ export function buildSiteIconSourceUrl(source: SiteIconSource, item: SiteIconLib
   const replacements: Record<string, string> = {
     '{slug}': item.slug,
     '{key}': item.key,
-    '{title}': encodeURIComponent(item.title)
+    '{title}': encodeURIComponent(item.title),
+    '{path}': item.slug
   }
 
   let url = source.urlTemplate
@@ -117,4 +123,72 @@ export async function downloadImageAsDataUrlOrKeepUrl(url: string) {
   } catch {
     return url
   }
+}
+
+function joinUrl(baseUrl: string, path: string) {
+  return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+}
+
+function getTemplateSourceBaseUrl(source: SiteIconSource) {
+  if (source.type !== 'template') return null
+
+  const directPathTemplate = source.urlTemplate.match(/^(.*)\{path\}$/)
+  if (directPathTemplate) {
+    return directPathTemplate[1]
+  }
+
+  const trailingTokenTemplate = source.urlTemplate.match(/^(.*)\/\{(?:slug|key|title)\}(?:\.[a-z0-9]+)?$/i)
+  if (trailingTokenTemplate) {
+    return trailingTokenTemplate[1]
+  }
+
+  return null
+}
+
+export function resolveRelativeIconUrl(path: string, sources = loadSiteIconSources()) {
+  const normalizedPath = path.trim()
+  if (!normalizedPath) return null
+
+  const enabledTemplateSources = sources.filter(source => source.enabled && source.type === 'template')
+  for (const source of enabledTemplateSources) {
+    const baseUrl = getTemplateSourceBaseUrl(source)
+    if (!baseUrl) continue
+    return joinUrl(baseUrl, normalizedPath)
+  }
+
+  return `./backend/iconlibs/${normalizedPath}`
+}
+
+export function resolveIconUrl(iconPath: string | null | undefined, sources = loadSiteIconSources()) {
+  if (!iconPath) return null
+  if (
+    iconPath.startsWith('http://') ||
+    iconPath.startsWith('https://') ||
+    iconPath.startsWith('data:')
+  ) {
+    return iconPath
+  }
+
+  return resolveRelativeIconUrl(iconPath, sources)
+}
+
+export function useResolvedIconUrl(getIconPath: () => string | null | undefined) {
+  const version = ref(0)
+
+  function handleSourcesUpdated() {
+    version.value += 1
+  }
+
+  onMounted(() => {
+    window.addEventListener(SITE_ICON_SOURCES_UPDATED_EVENT, handleSourcesUpdated)
+  })
+
+  onUnmounted(() => {
+    window.removeEventListener(SITE_ICON_SOURCES_UPDATED_EVENT, handleSourcesUpdated)
+  })
+
+  return computed(() => {
+    version.value
+    return resolveIconUrl(getIconPath())
+  })
 }

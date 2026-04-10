@@ -14,6 +14,7 @@ import BackToTop from '@/components/common/BackToTop.vue'
 import LinkDropdown from '@/components/common/LinkDropdown.vue'
 import SearchBar from '@/components/common/SearchBar.vue'
 import { Settings } from 'lucide-vue-next'
+import { resolveIconUrl } from '@/utils/siteIcons'
 
 const navStore = useNavStore()
 const configStore = useConfigStore()
@@ -77,10 +78,7 @@ function ensureValidTab() {
 // 拼接图标 URL
 function getIconUrl(path: string) {
   if (!path) return ''
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return path
-  }
-  return `./backend/iconlibs/${path}`
+  return resolveIconUrl(path) || ''
 }
 
 // 主题切换
