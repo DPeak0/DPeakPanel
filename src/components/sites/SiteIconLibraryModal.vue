@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
-import { Search, LoaderCircle, X, Plus, Pencil, Trash2, Check, FolderCog } from 'lucide-vue-next'
+import { Search, LoaderCircle, X, Plus, Pencil, Trash2, Check, FolderCog, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
   DEFAULT_SITE_ICON_SOURCES,
   buildSiteIconSourcePayload,
@@ -13,7 +13,8 @@ import {
 import {
   clearTemplateSourceSearchCache,
   downloadImageAsDataUrlOrKeepUrl,
-  loadRemoteIcons,
+  loadRemoteIconsPage,
+  searchRemoteIconsPage,
   type RemoteIconSearchItem
 } from '@/utils/siteIcons'
 
@@ -34,9 +35,14 @@ const errorMessage = ref('')
 const sourceErrorMessage = ref('')
 const sources = ref<SiteIconSource[]>([])
 const editingSourceKey = ref<string | null>(null)
-const allRemoteIcons = ref<RemoteIconSearchItem[]>([])
+const remoteIcons = ref<RemoteIconSearchItem[]>([])
 const selectedBrowseSourceKey = ref<'all' | string>('all')
+const currentPage = ref(1)
+const hasNextPage = ref(false)
+const totalResults = ref<number | null>(null)
 let searchAbortController: AbortController | null = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+const PAGE_SIZE = 72
 
 const sourceForm = reactive({
   key: '',
@@ -61,24 +67,17 @@ const activeBrowseSources = computed(() => {
   }
   return enabledSources.value.filter(source => source.key === selectedBrowseSourceKey.value)
 })
-const filteredRemoteIcons = computed(() => {
-  const search = keyword.value.trim().toLowerCase()
-  if (!search) {
-    return allRemoteIcons.value
+const pageSummary = computed(() => {
+  const start = remoteIcons.value.length === 0 ? 0 : (currentPage.value - 1) * PAGE_SIZE + 1
+  const end = remoteIcons.value.length === 0 ? 0 : start + remoteIcons.value.length - 1
+  if (totalResults.value !== null) {
+    return `第 ${currentPage.value} 页 · 显示 ${start}-${end} / ${totalResults.value}`
   }
-
-  return allRemoteIcons.value.filter(item =>
-    item.name.toLowerCase().includes(search) ||
-    item.collectionName.toLowerCase().includes(search) ||
-    item.sourceName.toLowerCase().includes(search) ||
-    item.id.toLowerCase().includes(search) ||
-    (item.relativePath || '').toLowerCase().includes(search)
-  )
+  return `第 ${currentPage.value} 页 · 当前页 ${remoteIcons.value.length} 个图标`
 })
 
 function loadSources() {
   sources.value = loadSiteIconSources()
-  clearTemplateSourceSearchCache()
   if (
     selectedBrowseSourceKey.value !== 'all' &&
     !sources.value.some(source => source.enabled && source.key === selectedBrowseSourceKey.value)
@@ -187,10 +186,17 @@ function close() {
     searchAbortController.abort()
     searchAbortController = null
   }
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
   activeTab.value = 'browse'
   keyword.value = ''
   selectedBrowseSourceKey.value = 'all'
-  allRemoteIcons.value = []
+  currentPage.value = 1
+  remoteIcons.value = []
+  hasNextPage.value = false
+  totalResults.value = null
   isSearching.value = false
   errorMessage.value = ''
   sourceErrorMessage.value = ''
@@ -222,13 +228,34 @@ async function selectIcon(icon: RemoteIconSearchItem) {
   }
 }
 
+function resetBrowsePageOrReload() {
+  if (currentPage.value !== 1) {
+    currentPage.value = 1
+    return
+  }
+
+  loadBrowseIcons()
+}
+
+function goToPreviousPage() {
+  if (currentPage.value <= 1 || isSearching.value) return
+  currentPage.value -= 1
+}
+
+function goToNextPage() {
+  if (!hasNextPage.value || isSearching.value) return
+  currentPage.value += 1
+}
+
 async function loadBrowseIcons() {
   if (searchAbortController) {
     searchAbortController.abort()
   }
 
   if (activeBrowseSources.value.length === 0) {
-    allRemoteIcons.value = []
+    remoteIcons.value = []
+    hasNextPage.value = false
+    totalResults.value = 0
     isSearching.value = false
     errorMessage.value = ''
     return
@@ -239,12 +266,19 @@ async function loadBrowseIcons() {
   errorMessage.value = ''
 
   try {
-    allRemoteIcons.value = await loadRemoteIcons(activeBrowseSources.value, searchAbortController.signal)
+    const search = keyword.value.trim()
+    const result = search
+      ? await searchRemoteIconsPage(search, activeBrowseSources.value, currentPage.value, PAGE_SIZE, searchAbortController.signal)
+      : await loadRemoteIconsPage(activeBrowseSources.value, currentPage.value, PAGE_SIZE, searchAbortController.signal)
+
+    remoteIcons.value = result.items
+    hasNextPage.value = result.hasNextPage
+    totalResults.value = result.total
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return
     }
-    errorMessage.value = error instanceof Error ? error.message : '远程搜索失败'
+    errorMessage.value = error instanceof Error ? error.message : '图标加载失败'
   } finally {
     isSearching.value = false
     searchAbortController = null
@@ -259,19 +293,40 @@ watch(
     resetSourceForm()
     keyword.value = ''
     selectedBrowseSourceKey.value = 'all'
-    allRemoteIcons.value = []
+    currentPage.value = 1
+    remoteIcons.value = []
+    hasNextPage.value = false
+    totalResults.value = null
     errorMessage.value = ''
     loadBrowseIcons()
   },
   { immediate: true }
 )
 
+watch(keyword, () => {
+  if (!props.open || activeTab.value !== 'browse') return
+
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+
+  searchTimer = setTimeout(() => {
+    searchTimer = null
+    resetBrowsePageOrReload()
+  }, 260)
+})
+
 watch(activeTab, (tab) => {
   if (tab !== 'browse') return
-  loadBrowseIcons()
+  resetBrowsePageOrReload()
 })
 
 watch(selectedBrowseSourceKey, () => {
+  if (!props.open || activeTab.value !== 'browse') return
+  resetBrowsePageOrReload()
+})
+
+watch(currentPage, () => {
   if (!props.open || activeTab.value !== 'browse') return
   loadBrowseIcons()
 })
@@ -279,6 +334,9 @@ watch(selectedBrowseSourceKey, () => {
 onBeforeUnmount(() => {
   if (searchAbortController) {
     searchAbortController.abort()
+  }
+  if (searchTimer) {
+    clearTimeout(searchTimer)
   }
 })
 </script>
@@ -341,7 +399,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p class="helper-text">
-          当前会直接加载所选来源的全部图标。搜索框仅用于在已加载结果里筛选，`全部` 会同时展示所有已启用图标源。
+          默认按页加载图标，每次只请求当前页；输入关键词后会切换为分页搜索，避免一次性加载整库造成卡顿。
         </p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
 
@@ -351,30 +409,46 @@ onBeforeUnmount(() => {
 
         <div v-else-if="isSearching" class="search-loading-state">
           <LoaderCircle class="icon-loading large" />
-          <span>正在加载图标...</span>
+          <span>{{ keyword.trim() ? '正在搜索图标...' : '正在加载图标...' }}</span>
         </div>
 
-        <div v-else-if="filteredRemoteIcons.length === 0" class="empty-search-state">
+        <div v-else-if="remoteIcons.length === 0" class="empty-search-state">
           {{ keyword.trim() ? '未找到匹配图标，试试别的关键词。' : '当前来源下没有可显示的图标。' }}
         </div>
 
-        <div v-else class="icon-grid">
-          <button
-            v-for="item in filteredRemoteIcons"
-            :key="item.id"
-            class="icon-card"
-            :disabled="loadingKey === item.id"
-            @click="selectIcon(item)"
-          >
-            <div class="icon-preview">
-              <LoaderCircle v-if="loadingKey === item.id" class="icon-loading" />
-              <img v-else :src="getPreviewUrl(item)" :alt="item.id" class="icon-image" loading="lazy" />
+        <div v-else class="browse-results">
+          <div class="pagination-bar">
+            <span class="pagination-summary">{{ pageSummary }}</span>
+            <div class="pagination-actions">
+              <button class="page-btn" :disabled="currentPage <= 1 || isSearching" @click="goToPreviousPage">
+                <ChevronLeft class="icon-sm" />
+                上一页
+              </button>
+              <button class="page-btn" :disabled="!hasNextPage || isSearching" @click="goToNextPage">
+                下一页
+                <ChevronRight class="icon-sm" />
+              </button>
             </div>
-            <span class="icon-title">{{ item.name }}</span>
-            <span class="icon-subtitle">{{ item.collectionName }}</span>
-            <span class="icon-source">{{ item.sourceName }}</span>
-            <span class="icon-key">{{ item.id }}</span>
-          </button>
+          </div>
+
+          <div class="icon-grid">
+            <button
+              v-for="item in remoteIcons"
+              :key="item.id"
+              class="icon-card"
+              :disabled="loadingKey === item.id"
+              @click="selectIcon(item)"
+            >
+              <div class="icon-preview">
+                <LoaderCircle v-if="loadingKey === item.id" class="icon-loading" />
+                <img v-else :src="getPreviewUrl(item)" :alt="item.id" class="icon-image" loading="lazy" />
+              </div>
+              <span class="icon-title">{{ item.name }}</span>
+              <span class="icon-subtitle">{{ item.collectionName }}</span>
+              <span class="icon-source">{{ item.sourceName }}</span>
+              <span class="icon-key">{{ item.id }}</span>
+            </button>
+          </div>
         </div>
       </template>
 
@@ -692,6 +766,51 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+}
+
+.browse-results {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pagination-bar,
+.pagination-actions,
+.page-btn {
+  display: flex;
+  align-items: center;
+}
+
+.pagination-bar {
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.35rem 1.25rem 0;
+}
+
+.pagination-actions {
+  gap: 0.55rem;
+}
+
+.pagination-summary {
+  color: hsl(var(--text-secondary));
+  font-size: 0.82rem;
+}
+
+.page-btn {
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid hsl(var(--glass-border));
+  background: transparent;
+  color: hsl(var(--text-primary));
+  cursor: pointer;
+  padding: 0.62rem 0.85rem;
+  border-radius: 999px;
+}
+
+.page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .icon-grid {

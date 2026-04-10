@@ -19,9 +19,23 @@ export interface RemoteIconSearchItem {
   relativePath?: string
 }
 
+export interface RemoteIconPageResult {
+  items: RemoteIconSearchItem[]
+  hasNextPage: boolean
+  total: number | null
+}
+
+interface DirectoryListingEntry {
+  name: string
+  isDir: boolean
+  isImage: boolean
+  href: string
+}
+
 const ICONIFY_API_BASE = 'https://api.iconify.design'
 const TEMPLATE_SOURCE_MAX_DEPTH = 4
 const templateSourceIndexCache = new Map<string, Promise<RemoteIconSearchItem[]>>()
+const templateDirectoryListingCache = new Map<string, DirectoryListingEntry[]>()
 
 const FAVICON_SERVICES = [
   (hostname: string) => `https://icon.horse/icon/${hostname}`,
@@ -189,7 +203,7 @@ async function fetchJsonDirectoryListing(url: string, signal?: AbortSignal) {
     is_image?: boolean
   }>
 
-  return payload.map(item => ({
+  return payload.map<DirectoryListingEntry>(item => ({
     name: item.name,
     isDir: item.is_dir === true,
     isImage: item.is_image === true,
@@ -202,7 +216,7 @@ function parseHtmlDirectoryListing(html: string) {
     html.matchAll(/<a class="text-link file-link" href="([^"]+)" title="([^"]+)"/g)
   )
 
-  return matches.map(match => {
+  return matches.map<DirectoryListingEntry>(match => {
     const href = match[1]
     const name = match[2]
     const isDir = href.endsWith('/')
@@ -215,7 +229,7 @@ function parseHtmlDirectoryListing(html: string) {
   })
 }
 
-async function fetchHtmlDirectoryListing(url: string, signal?: AbortSignal) {
+async function fetchHtmlDirectoryListing(url: string, signal?: AbortSignal): Promise<DirectoryListingEntry[]> {
   const response = await fetch(url, { signal })
   if (!response.ok) {
     throw new Error(`目录请求失败: ${response.status}`)
@@ -225,13 +239,20 @@ async function fetchHtmlDirectoryListing(url: string, signal?: AbortSignal) {
   return parseHtmlDirectoryListing(html)
 }
 
-async function fetchDirectoryListing(url: string, signal?: AbortSignal) {
+async function fetchDirectoryListing(url: string, signal?: AbortSignal): Promise<DirectoryListingEntry[]> {
+  if (templateDirectoryListingCache.has(url)) {
+    return templateDirectoryListingCache.get(url)!
+  }
+
   const jsonEntries = await fetchJsonDirectoryListing(url, signal)
   if (jsonEntries) {
+    templateDirectoryListingCache.set(url, jsonEntries)
     return jsonEntries
   }
 
-  return fetchHtmlDirectoryListing(url, signal)
+  const htmlEntries = await fetchHtmlDirectoryListing(url, signal)
+  templateDirectoryListingCache.set(url, htmlEntries)
+  return htmlEntries
 }
 
 async function buildTemplateSourceIndex(source: SiteIconSource, signal?: AbortSignal) {
@@ -308,128 +329,293 @@ function getTemplateSourceIndex(source: SiteIconSource, signal?: AbortSignal) {
 
 export function clearTemplateSourceSearchCache() {
   templateSourceIndexCache.clear()
-}
-
-async function searchSimpleIconsSource(source: SiteIconSource, query: string, signal?: AbortSignal, limit = 48) {
-  const keyword = query.trim()
-  if (keyword.length < 2) {
-    return [] as RemoteIconSearchItem[]
-  }
-
-  const searchUrl = `${ICONIFY_API_BASE}/search?query=${encodeURIComponent(keyword)}&limit=${limit}`
-  const response = await fetch(searchUrl, { signal })
-  if (!response.ok) {
-    throw new Error(`远程图标搜索失败: ${response.status}`)
-  }
-
-  const payload = await response.json() as {
-    icons?: string[]
-    collections?: Record<string, { name?: string }>
-  }
-
-  return (payload.icons || [])
-    .map((iconId) => {
-      const separatorIndex = iconId.indexOf(':')
-      if (separatorIndex <= 0 || separatorIndex >= iconId.length - 1) {
-        return null
-      }
-
-      const prefix = iconId.slice(0, separatorIndex)
-      const name = iconId.slice(separatorIndex + 1)
-      const iconUrl = buildIconifyIconUrl(iconId)
-
-      return {
-        id: iconId,
-        name,
-        collectionName: payload.collections?.[prefix]?.name || prefix,
-        previewUrl: iconUrl,
-        downloadUrl: iconUrl,
-        sourceKey: source.key,
-        sourceName: source.name,
-        sourceType: 'simple-icons'
-      }
-    })
-    .filter((item): item is RemoteIconSearchItem => item !== null)
-}
-
-async function searchTemplateIconsSource(source: SiteIconSource, query: string, signal?: AbortSignal, limit = 48) {
-  const keyword = query.trim().toLowerCase()
-  if (keyword.length < 2) {
-    return [] as RemoteIconSearchItem[]
-  }
-
-  const icons = await getTemplateSourceIndex(source, signal)
-  return icons
-    .filter(item =>
-      matchesKeyword(item.name, keyword) ||
-      matchesKeyword(item.relativePath || '', keyword)
-    )
-    .slice(0, limit)
-}
-
-export async function searchRemoteIcons(
-  query: string,
-  sources: SiteIconSource[],
-  signal?: AbortSignal,
-  limit = 48
-) {
-  const enabledSources = sources.filter(source => source.enabled)
-  const keyword = query.trim()
-  if (keyword.length < 2 || enabledSources.length === 0) {
-    return [] as RemoteIconSearchItem[]
-  }
-
-  const perSourceLimit = Math.max(12, Math.ceil(limit / Math.max(enabledSources.length, 1)))
-  const resultGroups = await Promise.all(
-    enabledSources.map(async (source) => {
-      if (source.type === 'template') {
-        return searchTemplateIconsSource(source, keyword, signal, perSourceLimit)
-      }
-      return searchSimpleIconsSource(source, keyword, signal, perSourceLimit)
-    })
-  )
-
-  return resultGroups
-    .flat()
-    .slice(0, limit)
+  templateDirectoryListingCache.clear()
 }
 
 function buildSimpleIconsIndex(source: SiteIconSource) {
-  return SITE_ICON_LIBRARY.map((item) => {
-    const iconUrl = buildSiteIconSourceUrl(source, item)
-    return {
-      id: `${source.key}:${item.key}`,
-      name: item.title,
-      collectionName: 'Simple Icons',
-      previewUrl: iconUrl,
-      downloadUrl: iconUrl,
-      sourceKey: source.key,
-      sourceName: source.name,
-      sourceType: 'simple-icons' as const,
-      relativePath: item.slug
-    }
-  })
+  return SITE_ICON_LIBRARY.map(item => buildSimpleIconItem(source, item))
 }
 
-export async function loadRemoteIcons(
-  sources: SiteIconSource[],
+function buildSimpleIconItem(source: SiteIconSource, item: SiteIconLibraryItem): RemoteIconSearchItem {
+  const iconUrl = buildSiteIconSourceUrl(source, item)
+  return {
+    id: `${source.key}:${item.key}`,
+    name: item.title,
+    collectionName: 'Simple Icons',
+    previewUrl: iconUrl,
+    downloadUrl: iconUrl,
+    sourceKey: source.key,
+    sourceName: source.name,
+    sourceType: 'simple-icons',
+    relativePath: item.slug
+  }
+}
+
+function matchesSimpleIconSearch(item: SiteIconLibraryItem, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  return (
+    item.title.toLowerCase().includes(normalizedKeyword) ||
+    item.key.toLowerCase().includes(normalizedKeyword) ||
+    item.slug.toLowerCase().includes(normalizedKeyword) ||
+    item.keywords.some(tag => tag.toLowerCase().includes(normalizedKeyword))
+  )
+}
+
+function paginateItems<T>(items: T[], page: number, pageSize: number) {
+  const safePage = Math.max(1, page)
+  const start = (safePage - 1) * pageSize
+  const end = start + pageSize
+  return {
+    items: items.slice(start, end),
+    hasNextPage: end < items.length,
+    total: items.length
+  }
+}
+
+async function loadSimpleIconsPage(
+  source: SiteIconSource,
+  page: number,
+  pageSize: number
+): Promise<RemoteIconPageResult> {
+  return paginateItems(buildSimpleIconsIndex(source), page, pageSize)
+}
+
+async function searchSimpleIconsPage(
+  source: SiteIconSource,
+  query: string,
+  page: number,
+  pageSize: number
+): Promise<RemoteIconPageResult> {
+  const matches = SITE_ICON_LIBRARY
+    .filter(item => matchesSimpleIconSearch(item, query))
+    .map(item => buildSimpleIconItem(source, item))
+
+  return paginateItems(matches, page, pageSize)
+}
+
+async function loadTemplateIconsPage(
+  source: SiteIconSource,
+  page: number,
+  pageSize: number,
   signal?: AbortSignal
-) {
-  const enabledSources = sources.filter(source => source.enabled)
-  if (enabledSources.length === 0) {
-    return [] as RemoteIconSearchItem[]
+): Promise<RemoteIconPageResult> {
+  const rootUrl = getTemplateSourceRootUrl(source)
+  if (!rootUrl) {
+    return {
+      items: [],
+      hasNextPage: false,
+      total: 0
+    }
   }
 
-  const resultGroups = await Promise.all(
-    enabledSources.map(async (source) => {
-      if (source.type === 'template') {
-        return getTemplateSourceIndex(source, signal)
+  const offset = Math.max(0, (Math.max(1, page) - 1) * pageSize)
+  const take = pageSize
+  const queue: Array<{ url: string; depth: number }> = [{ url: rootUrl, depth: 0 }]
+  const visited = new Set<string>()
+  const icons: RemoteIconSearchItem[] = []
+  let seenCount = 0
+  let reachedEnd = true
+
+  while (queue.length > 0) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
+    const current = queue.shift()
+    if (!current) continue
+
+    const normalizedUrl = current.url.endsWith('/') ? current.url : `${current.url}/`
+    if (visited.has(normalizedUrl)) continue
+    visited.add(normalizedUrl)
+
+    let entries: Awaited<ReturnType<typeof fetchDirectoryListing>> = []
+    try {
+      entries = await fetchDirectoryListing(normalizedUrl, signal)
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      const absoluteUrl = new URL(entry.href, normalizedUrl).href
+      if (entry.isDir) {
+        if (current.depth + 1 <= TEMPLATE_SOURCE_MAX_DEPTH) {
+          queue.push({ url: absoluteUrl, depth: current.depth + 1 })
+        }
+        continue
       }
-      return buildSimpleIconsIndex(source)
-    })
+
+      if (!entry.isImage && !isImagePath(entry.name)) {
+        continue
+      }
+
+      if (seenCount >= offset && icons.length < take + 1) {
+        const relativePath = decodeURIComponent(absoluteUrl.replace(rootUrl, ''))
+        icons.push({
+          id: `${source.key}:${relativePath}`,
+          name: entry.name.replace(/\.[^.]+$/, ''),
+          collectionName: source.name,
+          previewUrl: absoluteUrl,
+          downloadUrl: absoluteUrl,
+          sourceKey: source.key,
+          sourceName: source.name,
+          sourceType: 'template',
+          relativePath
+        })
+      }
+
+      seenCount += 1
+
+      if (icons.length >= take + 1) {
+        reachedEnd = false
+        return {
+          items: icons.slice(0, take),
+          hasNextPage: true,
+          total: null
+        }
+      }
+    }
+  }
+
+  return {
+    items: icons.slice(0, take),
+    hasNextPage: false,
+    total: reachedEnd ? seenCount : null
+  }
+}
+
+async function searchTemplateIconsPage(
+  source: SiteIconSource,
+  query: string,
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<RemoteIconPageResult> {
+  const keyword = query.trim().toLowerCase()
+  if (keyword.length < 1) {
+    return {
+      items: [],
+      hasNextPage: false,
+      total: 0
+    }
+  }
+
+  const icons = await getTemplateSourceIndex(source, signal)
+  const matches = icons.filter(item =>
+    matchesKeyword(item.name, keyword) ||
+    matchesKeyword(item.relativePath || '', keyword)
   )
 
-  return resultGroups.flat()
+  return paginateItems(matches, page, pageSize)
+}
+
+async function loadSourcePage(
+  source: SiteIconSource,
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<RemoteIconPageResult> {
+  if (source.type === 'template') {
+    return loadTemplateIconsPage(source, page, pageSize, signal)
+  }
+
+  return loadSimpleIconsPage(source, page, pageSize)
+}
+
+async function searchSourcePage(
+  source: SiteIconSource,
+  query: string,
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<RemoteIconPageResult> {
+  if (source.type === 'template') {
+    return searchTemplateIconsPage(source, query, page, pageSize, signal)
+  }
+
+  return searchSimpleIconsPage(source, query, page, pageSize)
+}
+
+async function loadPagedIconsFromSources(
+  sources: SiteIconSource[],
+  page: number,
+  pageSize: number,
+  loadPage: (
+    source: SiteIconSource,
+    page: number,
+    pageSize: number,
+    signal?: AbortSignal
+  ) => Promise<RemoteIconPageResult>,
+  signal?: AbortSignal
+): Promise<RemoteIconPageResult> {
+  const enabledSources = sources.filter(source => source.enabled)
+  if (enabledSources.length === 0) {
+    return {
+      items: [],
+      hasNextPage: false,
+      total: 0
+    }
+  }
+
+  const perSourcePageSize = Math.max(12, Math.ceil(pageSize / enabledSources.length))
+  const results = await Promise.all(
+    enabledSources.map(source => loadPage(source, page, perSourcePageSize, signal))
+  )
+
+  const items = results
+    .flatMap(result => result.items)
+    .slice(0, pageSize)
+
+  const hasNextPage = results.some(result => result.hasNextPage)
+  const total = results.every(result => result.total !== null)
+    ? results.reduce((sum, result) => sum + (result.total || 0), 0)
+    : null
+
+  return {
+    items,
+    hasNextPage,
+    total
+  }
+}
+
+export async function loadRemoteIconsPage(
+  sources: SiteIconSource[],
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<RemoteIconPageResult> {
+  const enabledSources = sources.filter(source => source.enabled)
+  if (enabledSources.length === 1) {
+    return loadSourcePage(enabledSources[0], page, pageSize, signal)
+  }
+
+  return loadPagedIconsFromSources(enabledSources, page, pageSize, loadSourcePage, signal)
+}
+
+export async function searchRemoteIconsPage(
+  query: string,
+  sources: SiteIconSource[],
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<RemoteIconPageResult> {
+  const keyword = query.trim()
+  if (!keyword) {
+    return loadRemoteIconsPage(sources, page, pageSize, signal)
+  }
+
+  const enabledSources = sources.filter(source => source.enabled)
+  if (enabledSources.length === 1) {
+    return searchSourcePage(enabledSources[0], keyword, page, pageSize, signal)
+  }
+
+  return loadPagedIconsFromSources(
+    enabledSources,
+    page,
+    pageSize,
+    (source, sourcePage, sourcePageSize, currentSignal) =>
+      searchSourcePage(source, keyword, sourcePage, sourcePageSize, currentSignal),
+    signal
+  )
 }
 
 function joinUrl(baseUrl: string, path: string) {
