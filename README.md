@@ -1,22 +1,20 @@
 # DPeakPanel
 
-`DPeakPanel` 是基于 [gdy666/LuckyLightPanel](https://github.com/gdy666/LuckyLightPanel) 二次整理的前端面板项目，当前版本主要补充了更直接的 Docker 部署方式，方便在服务器或容器环境中快速运行。
+`DPeakPanel` 是基于 [gdy666/LuckyLightPanel](https://github.com/gdy666/LuckyLightPanel) 持续整理和扩展的个人导航面板项目，当前版本重点补充了更适合服务器场景的 Docker 部署方式，以及更完整的前端编辑、图标管理和登录权限能力。
 
-## 项目说明
+## Docker 快速开始
 
-- 基于原项目 `LuckyLightPanel` 维护
-- 保留原有前端面板能力
-- 增加 Docker 镜像构建与部署支持
-
-## Docker 部署
-
+如果你希望面板中的 Docker 页面显示宿主机真实容器状态，请务必挂载 Docker Socket 和运行时输出目录。
 
 ```bash
-docker pull ghcr.io/dpeak0/dpeakpanel:latest
+mkdir -p ./runtime/backend
+
 docker run -d \
   --name dpeakpanel \
   --restart unless-stopped \
   -p 5173:5173 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/runtime/backend:/usr/share/nginx/html/backend/runtime \
   ghcr.io/dpeak0/dpeakpanel:latest
 ```
 
@@ -26,27 +24,17 @@ docker run -d \
 http://服务器IP:5173
 ```
 
+## 登录与权限
 
-## 常用命令
-
-```bash
-# 启动
-docker compose up -d
-
-# 重建并启动
-docker compose up -d --build
-
-# 查看日志
-docker compose logs -f
-
-# 停止
-docker compose down
-```
-
-
+- 首次启用时默认管理员账号为 `admin`
+- 默认密码为 `admin123`
+- 登录后建议立即修改管理员密码
+- 只有管理员可以看到设置入口
+- 普通用户只保留被授权分组的查看权限
 
 ## 致谢
 
-本项目基于以下项目进行二次整理：
+本项目基于以下开源项目持续演进：
 
 - [gdy666/LuckyLightPanel](https://github.com/gdy666/LuckyLightPanel)
+- [hslr-s/sun-panel](https://github.com/hslr-s/sun-panel)

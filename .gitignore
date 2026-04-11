@@ -1,6 +1,7 @@
 *.exe
 /dist/
 /tsconfig.tsbuildinfo
+/compose.yaml
 /node_modules/*
 /.qoder/*
 /.shared/*
