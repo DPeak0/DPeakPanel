@@ -4,17 +4,14 @@
 
 ## Docker 快速开始
 
-如果你希望面板中的 Docker 页面显示宿主机真实容器状态，请务必挂载 Docker Socket 和运行时输出目录。
+如果你希望面板中的 Docker 页面显示宿主机真实容器状态，请务必挂载 Docker Socket。
 
 ```bash
-mkdir -p ./runtime/backend
-
 docker run -d \
   --name dpeakpanel \
   --restart unless-stopped \
   -p 5173:5173 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v $(pwd)/runtime/backend:/usr/share/nginx/html/backend/runtime \
   ghcr.io/dpeak0/dpeakpanel:latest
 ```
 
