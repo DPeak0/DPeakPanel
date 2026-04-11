@@ -1,5 +1,6 @@
 *.exe
 /dist/
+/tsconfig.tsbuildinfo
 /node_modules/*
 /.qoder/*
 /.shared/*
